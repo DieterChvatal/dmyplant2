@@ -585,7 +585,7 @@ class Engine(object):
         _dash['serialNumber'] = self.serialNumber
         _dash['id'] = self.id
         _dash['Count_OpHour'] = self.Count_OpHour
-        _dash['val start'] = self.val_start
+        _dash['val start'] = pd.to_datetime(self.val_start, format='%Y-%m-%d')
         _dash['oph@start'] = self.oph_start
         _dash['oph parts'] = self.oph_parts
         _dash['LOC'] = self.get_dataItem(

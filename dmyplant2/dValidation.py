@@ -10,23 +10,6 @@ from scipy.stats.distributions import chi2
 
 class Validation:
 
-    # define dashboard columns in expected order
-    # _dashcols = [
-    #     'Name',
-    #     'Engine ID',
-    #     'Design Number',
-    #     'Engine Type',
-    #     'Engine Version',
-    #     'P',
-    #     # 'P_NOM',
-    #     # 'BMEP',
-    #     'serialNumber',
-    #     'id',
-    #     'Count_OpHour',
-    #     'val start',
-    #     'oph@start',
-    #     'oph parts',
-    # ]
     _dash = None
     _val = None
     _engines = []
@@ -55,11 +38,9 @@ class Validation:
             if cui_log:
                 print(log)
 
-        # iterate over engines and columns
-        #ldash = [[e._d[c] for c in self._dashcols] for e in self._engines]
+        # create dashboard with list comprehension 
         ldash = [e.dash for e in self._engines]
         # dashboard as pandas Dataframe
-        #self._dash = pd.DataFrame(ldash, columns=self._dashcols)
         self._dash = pd.DataFrame(ldash)
 
     @ property
