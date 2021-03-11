@@ -111,6 +111,14 @@ login and credentials in the command window:
   Password: xxxxxxxx
 
 
+basic help is available in the pythone REPL:
+::
+  import dmyplant2
+  help(dmyplant2)
+
+  or 
+
+  help(dmyplant2.dEngine)
 
 
 Release History
