@@ -50,7 +50,65 @@ create an **input.csv** file with your myplant assets in your working directory,
   9;BMW MÜNCHEN;1319133;31.08.2020;4532;581
 
 create a python file **main.py** in your working directory:
+::
+  import dmyplant2
+  import pandas as pd
+  import numpy as np
+  import logging
+  import sys
+  import traceback
 
+  global DEBUG
+  DEBUG = True
+
+  logging.basicConfig(
+      filename='dmyplant.log',
+      filemode='w',
+      format='%(asctime)s %(levelname)s, %(message)s',
+      level=logging.INFO
+  )
+  hdlr = logging.StreamHandler(sys.stdout)
+  logging.getLogger().addHandler(hdlr)
+
+
+  def main():
+      try:
+          logging.info('---')
+          logging.info('dMyplant demo app started')
+
+          # load input data from files
+          dval = pd.read_csv("input.csv",sep=';', encoding='utf-8')
+          dval['val start'] = pd.to_datetime(dval['val start'], format='%d.%m.%Y')
+
+          dmyplant2.cred()
+          mp = dmyplant2.MyPlant(0) #parameter seconds to cache values e.g. 600 for 10 minutes
+          vl = dmyplant2.Validation(mp,dval, cui_log=True)                   
+
+          d=vl.dashboard
+          d['val start'] = pd.to_datetime(dval['val start'], format='%d.%m.%Y')
+
+          logging.info('dMyplant demo app completed.')
+          logging.info('---')
+
+      except Exception as e:
+          print(e)
+          if DEBUG:
+              traceback.print_tb(e.__traceback__)
+      finally:
+          hdlr.close()
+          logging.getLogger().removeHandler(hdlr)
+
+
+  if __name__ == '__main__':
+      main()
+    
+ 
+During the first run and every following 31 days, you are prompted for your myplant
+login and credentials in the command window:
+::
+  Please enter your myPlant login:
+  User: xxxxxxx
+  Password: xxxxxxxx
 
 
 
