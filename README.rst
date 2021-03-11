@@ -37,9 +37,6 @@ to remove these links use*
 Usage example
 -------------
 
-Development setup
------------------
-
 Release History
 ---------------
 
@@ -53,12 +50,13 @@ Your Name – dieter.chvatal@innio.com
 
 Distributed under the MIT license. See ``LICENSE`` for more information.
 
-`https://github.com/dieterch/dmyplant2 <https://github.com/dieterch/>`__
+`https://github.com/DieterChvatal/dmyplant2 <https://github.com/DieterChvatal/>`__
+
 
 Contributing
 ------------
 
-1. Fork it (https://github.com/dieterch/dmyplant2)
+1. Fork it (https://github.com/DieterChvatal/dmyplant2)
 2. Create your feature branch (``git checkout -b feature/fooBar``)
 3. Commit your changes (``git commit -am 'Add some fooBar'``)
 4. Push to the branch (``git push origin feature/fooBar``)
