@@ -15,26 +15,24 @@ figure:: header.png
 Installation
 ------------
 
-Windows:
+**Windows:**
 
 .. code:: sh
 
-inside Anaconda or Miniconda prompt:
+*inside Anaconda or Miniconda prompt:*
 
-git clone https://github.com/DieterChvatal/dmyplant.git
+1. git clone https://github.com/DieterChvatal/dmyplant.git
 
-then cd into the folder and run
+*cd into the folder and run*
 
-python setup.py develop
+2. python setup.py develop
 
-this creates links to this package in the Anaconda package location.
-to remove these links use
+*this creates links to this package in the Anaconda package location.
+to remove these links use*
 
-python setup.py develop --uninstall
+3. python setup.py develop --uninstall
 
-Now yo can modify and extend the package easily ...
-
---------------
+*Now you can modify and extend the package in place ...*
 
 Usage example
 -------------
