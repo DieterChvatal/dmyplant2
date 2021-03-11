@@ -59,7 +59,7 @@ create a python file **main.py** in your working directory:
   import traceback
 
   global DEBUG
-  DEBUG = True
+  DEBUG = False
 
   logging.basicConfig(
       filename='dmyplant.log',
@@ -78,14 +78,22 @@ create a python file **main.py** in your working directory:
 
           # load input data from files
           dval = pd.read_csv("input.csv",sep=';', encoding='utf-8')
+          # make sure dates are interpreted as intended by explicit format:
           dval['val start'] = pd.to_datetime(dval['val start'], format='%d.%m.%Y')
 
+          # ask & store credentials
           dmyplant2.cred()
-          mp = dmyplant2.MyPlant(0) #parameter seconds to cache values e.g. 600 for 10 minutes
-          vl = dmyplant2.Validation(mp,dval, cui_log=True)                   
 
+          # myplant instance
+          mp = dmyplant2.MyPlant(600) #parameter seconds to cache values e.g. 600 for 10 minutes or 0 to force reload
+
+          # validation instance
+          vl = dmyplant2.Validation(mp,dval, cui_log=False)                   
+
+          # call dashboard
           d=vl.dashboard
-          d['val start'] = pd.to_datetime(dval['val start'], format='%d.%m.%Y')
+          print('\nDashboard:')
+          print(d, '\n')
 
           logging.info('dMyplant demo app completed.')
           logging.info('---')
