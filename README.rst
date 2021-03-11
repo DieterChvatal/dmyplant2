@@ -17,6 +17,8 @@ Installation
 
 **Windows:**
 
+install miniconda distribution https://conda.io/projects/conda/en/latest/index.html
+
 *inside Anaconda or Miniconda prompt:*
 ::
   git clone https://github.com/DieterChvatal/dmyplant.git
