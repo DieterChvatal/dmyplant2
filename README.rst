@@ -21,7 +21,7 @@ Installation
 
 *inside Anaconda or Miniconda prompt:*
 
-1. git clone https://github.com/DieterChvatal/dmyplant.git
+..1. git clone https://github.com/DieterChvatal/dmyplant.git::
 
 *cd into the folder and run*
 
