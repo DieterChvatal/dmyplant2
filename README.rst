@@ -19,23 +19,23 @@ Installation
 
 *inside Anaconda or Miniconda prompt:*
 ::
-  1. git clone https://github.com/DieterChvatal/dmyplant.git
+  git clone https://github.com/DieterChvatal/dmyplant.git
 
 *cd into the folder and run*
 ::
-  2. python setup.py develop
+  python setup.py develop
 
 *this creates links to this package in the Anaconda package location.
 to remove these links use*
 ::
-  3. python setup.py develop --uninstall
+  python setup.py develop --uninstall
 
 *Now you can modify and extend the package in place ...*
 
 Usage example
 -------------
 
-*create an input.csv file with your myplant assets, e.g.*
+create an **input.csv** file with your myplant assets in your working directory, e.g.:
 ::
   n;Validation Engine;serialNumber;val start;oph@start;starts@start
   0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378
@@ -48,6 +48,9 @@ Usage example
   7;PROSPERITY WEAVING MILLS LTD - 1 (1351388-X243);1250578;12.10.2020;0;352
   8;SOTERNIX RENOVE;1310773;25.09.2020;18439;1218
   9;BMW MÜNCHEN;1319133;31.08.2020;4532;581
+
+create a python file **main.py** in your working directory:
+
 
 
 
