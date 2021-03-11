@@ -17,19 +17,14 @@ Installation
 
 **Windows:**
 
-.. code:: sh
+..*inside Anaconda or Miniconda prompt:*::
+1. git clone https://github.com/DieterChvatal/dmyplant.git
 
-*inside Anaconda or Miniconda prompt:*
-
-..1. git clone https://github.com/DieterChvatal/dmyplant.git::
-
-*cd into the folder and run*
-
+..*cd into the folder and run*::
 2. python setup.py develop
 
-*this creates links to this package in the Anaconda package location.
-to remove these links use*
-
+..*this creates links to this package in the Anaconda package location.
+to remove these links use*::
 3. python setup.py develop --uninstall
 
 *Now you can modify and extend the package in place ...*
@@ -37,10 +32,8 @@ to remove these links use*
 Usage example
 -------------
 
-*create an input.csv file with your myplant assets, e.g.*::
-
-.. code::
-code::n;Validation Engine;serialNumber;val start;oph@start;starts@start
+..*create an input.csv file with your myplant assets, e.g.*::
+n;Validation Engine;serialNumber;val start;oph@start;starts@start
 0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378
 1;REGENSBURG;1175579;14.09.2020;30402;1351
 2;ROCHE PENZBERG KWKK;1184199;27.04.2020;25208;749
