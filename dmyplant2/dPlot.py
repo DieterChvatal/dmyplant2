@@ -216,7 +216,7 @@ def chart(d, ys):
             for col in y:
                 color = next(cycle(colors))['color']
                 lines.append(
-                    ax.plot(d[col], linestyle=ls, label=col, color=color))
+                    ax.plot(d['datetime'], d[col], linestyle=ls, label=col, color=color))
                 cols.append(col)
             ax.set_ylabel(', '.join(y))
             ax.tick_params(axis='y')
