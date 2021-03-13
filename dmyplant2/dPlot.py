@@ -164,8 +164,8 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
-def chart(d, ys):
-    fig, ax = plt.subplots(figsize=(20, 12))
+def chart(d, ys, x='datetime'):
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     axes = [ax]
     for y in ys[1:]:
@@ -178,9 +178,9 @@ def chart(d, ys):
     if extra_ys > 0:
         temp = 0.95
         if extra_ys <= 2:
-            temp = 0.85
+            temp = 0.8
         elif extra_ys <= 4:
-            temp = 0.60
+            temp = 0.7
         if extra_ys > 5:
             print('you are being ridiculous')
         fig.subplots_adjust(right=temp)
@@ -203,22 +203,25 @@ def chart(d, ys):
     colors = cycle(matplotlib.rcParams['axes.prop_cycle'])
     for ax, y in zip(axes, ys):
         ls = next(cycle(line_styles))
-        if len(y) == 1:
-            col = y[0]
+        if len(y['col']) == 1:
+            col = y['col'][0]
             cols.append(col)
             color = next(cycle(colors))['color']
-            lines.append(ax.plot(d[col], linestyle=ls, label=col, color=color))
+            lines.append(ax.plot(d[x], d[col],
+                                 linestyle=ls, label=col, color=color))
 
             ax.set_ylabel(col, color=color)
+            ax.set_ylim(y['ylim'])
             ax.tick_params(axis='y', colors=color)
             ax.spines['right'].set_color(color)
         else:
-            for col in y:
+            for col in y['col']:
                 color = next(cycle(colors))['color']
                 lines.append(
-                    ax.plot(d['datetime'], d[col], linestyle=ls, label=col, color=color))
+                    ax.plot(d[x], d[col], linestyle=ls, label=col, color=color))
                 cols.append(col)
-            ax.set_ylabel(', '.join(y))
+            ax.set_ylabel(', '.join(y['col']))
+            ax.set_ylim(y['ylim'])
             ax.tick_params(axis='y')
     axes[0].set_xlabel(d.index.name)
     lns = lines[0]
