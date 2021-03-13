@@ -165,7 +165,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
 
 
 def chart(d, ys):
-    fig, ax = plt.subplots(x='datetime', figsize=(20, 12))
+    fig, ax = plt.subplots(figsize=(20, 12))
 
     axes = [ax]
     for y in ys[1:]:
