@@ -168,6 +168,7 @@ def chart(d, ys, x='datetime'):
     fig, ax = plt.subplots(figsize=(12, 8))
 
     axes = [ax]
+    ax.tick_params(axis='x', labelrotation=30)
     for y in ys[1:]:
         # Twin the x-axis twice to make independent y-axes.
         axes.append(ax.twinx())
@@ -206,7 +207,10 @@ def chart(d, ys, x='datetime'):
         if len(y['col']) == 1:
             col = y['col'][0]
             cols.append(col)
-            color = next(cycle(colors))['color']
+            if 'color' in y:
+                color = y['color']
+            else:
+                color = next(cycle(colors))['color']
             lines.append(ax.plot(d[x], d[col],
                                  linestyle=ls, label=col, color=color))
 
@@ -217,7 +221,10 @@ def chart(d, ys, x='datetime'):
             ax.spines['right'].set_color(color)
         else:
             for col in y['col']:
-                color = next(cycle(colors))['color']
+                if 'color' in y:
+                    color = y['color']
+                else:
+                    color = next(cycle(colors))['color']
                 lines.append(
                     ax.plot(d[x], d[col], linestyle=ls, label=col, color=color))
                 cols.append(col)
@@ -231,7 +238,6 @@ def chart(d, ys, x='datetime'):
         lns += l
     labs = [l.get_label() for l in lns]
     axes[0].legend(lns, labs, loc=0)
-
     plt.show()
 
 
