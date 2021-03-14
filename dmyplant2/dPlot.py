@@ -211,7 +211,8 @@ def chart(d, ys, x='datetime'):
                                  linestyle=ls, label=col, color=color))
 
             ax.set_ylabel(col, color=color)
-            ax.set_ylim(y['ylim'])
+            if 'ylim' in y:
+                ax.set_ylim(y['ylim'])
             ax.tick_params(axis='y', colors=color)
             ax.spines['right'].set_color(color)
         else:
@@ -221,7 +222,8 @@ def chart(d, ys, x='datetime'):
                     ax.plot(d[x], d[col], linestyle=ls, label=col, color=color))
                 cols.append(col)
             ax.set_ylabel(', '.join(y['col']))
-            ax.set_ylim(y['ylim'])
+            if 'ylim' in y:
+                ax.set_ylim(y['ylim'])
             ax.tick_params(axis='y')
     axes[0].set_xlabel(d.index.name)
     lns = lines[0]
