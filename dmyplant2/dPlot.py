@@ -164,11 +164,19 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
-def chart(d, ys, x='datetime'):
-    fig, ax = plt.subplots(figsize=(12, 8))
+def chart(d, ys, x='datetime', title=None, *args, **kwargs):
+
+    # for entry in kwargs.items():
+    #     print("Key: {}, value: {}".format(entry[0], entry[1]))
+
+    fig, ax = plt.subplots(*args, **kwargs)
 
     axes = [ax]
     ax.tick_params(axis='x', labelrotation=30)
+
+    if title:
+        ax.set_title(title)
+
     for y in ys[1:]:
         # Twin the x-axis twice to make independent y-axes.
         axes.append(ax.twinx())
