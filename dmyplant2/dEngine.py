@@ -308,7 +308,7 @@ class Engine(object):
         except:
             raise
 
-    def batch_hist_alarms(self, p_severities=[600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
+    def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
         Get pandas dataFrame of Events history, either limit or From & to are required
         p_severities        list   
@@ -345,7 +345,8 @@ class Engine(object):
             # import to Pandas DataFrame
             dm = pd.DataFrame(messages)
             # Addtional Datetime column calculated from timestamp
-            dm['datetime'] = pd.to_datetime(dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
+            dm['datetime'] = pd.to_datetime(
+                dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
             return dm
         except:
             raise
