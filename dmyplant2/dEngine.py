@@ -312,9 +312,9 @@ class Engine(object):
         """
         Get pandas dataFrame of Events history, either limit or From & to are required
         p_severities        list   
-                                600,650 ... operational messages
-                                700 ... warnings
-                                800 ... alarms
+                                500,600,650 ... operational messages
+                                700         ... warnings
+                                800         ... alarms
         p_offset            int64, number of messages to skip
         p_limit             int64, number of messages to download
         p_from              string timestamp in milliseconds.
