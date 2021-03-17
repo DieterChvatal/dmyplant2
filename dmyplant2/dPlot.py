@@ -25,7 +25,25 @@ def idx(n, s, e, x):
 
 
 def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFrame, cl=[10, 50, 90], xmin=None, xmax=None, factor=2.0, ymax=24000):
+    """Plot the demonstrated Reliability of the specified validation fleet
 
+    Args:
+        vl ([dmyplant2.Validation class]): [Class with several function around the validation fleet]
+        beta (float, optional): [Weibull beta parameter]. Defaults to 1.21.
+        T (int, optional): [Runtime for Assessment of Reliabiliy, calculated with LIPSON Method]. Defaults to 30000.
+        s (int, optional): [number of points to plot]. Defaults to 1000.
+        ft ([type], optional): [pd.DataFrame with observed failures]. Defaults to pd.DataFrame.
+            required Columns: date;failures;serialNumber;comment
+        cl (list, optional): [list with relialibilty lines for specific confidence levels to plot, 
+            Numbers between 0 and 100]. Defaults to [10, 50, 90].
+        xmin ([timestamp], optional): [left margin of x-axis]. Defaults to None.
+        xmax ([timestamp], optional): [right margin of x-axis]. Defaults to None.
+        factor (float, optional): [Extrapolation factor]. Defaults to 2.0.
+        ymax (int, optional): [right y-axis max value]. Defaults to 24000.
+
+    Raises:
+        ValueError: [Time Range not properly specified]
+    """
     # define milestones
     start_ts = vl.valstart_ts if xmin == None else xmin  # val start
 
@@ -164,8 +182,29 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
-def chart(d, ys, x='datetime', title=None, *args, **kwargs):
+def chart(d, ys, x='datetime', title=None, grid=True, *args, **kwargs):
+    """Generate Diane like chart with multiple axes
 
+    example:
+
+    dmyplant2.chart(df, [
+    {'col': ['PowerAct'],'ylim': [0, 5000]},
+    {'col': ['Various_Values_SpeedAct'],'ylim': [0, 2500], 'color':'darkblue'},
+    {'col': ['CountOph'],'ylim': [0, 500]},
+    {'col': ['Hyd_PressCrankCase'],'ylim': [-40, 60]},
+    {'col': ['Hyd_PressOilDif'],'ylim': [0, 1]}
+    ],
+    title = e,
+    grid = False,
+    figsize = (14,10))
+
+    Args:
+        d ([pd.dataFrame]): [Data , e.g downloaded by engine.batch_hist_dataItems(...)]
+        ys ([list of dicts]): [the d columns to plot]
+        x (str, optional): [x-axis column as string]. Defaults to 'datetime'.
+        title (str, optional): [Main Title of figure]. Defaults to None.
+        grid (bool, optional): [displaygrid on left axis]. Defaults to True.
+    """
     # for entry in kwargs.items():
     #     print("Key: {}, value: {}".format(entry[0], entry[1]))
 
@@ -174,6 +213,8 @@ def chart(d, ys, x='datetime', title=None, *args, **kwargs):
     axes = [ax]
     ax.tick_params(axis='x', labelrotation=30)
 
+    if grid:
+        ax.grid()
     if title:
         ax.set_title(title)
 
