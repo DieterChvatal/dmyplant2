@@ -13,9 +13,8 @@ import arrow
 
 
 class Engine(object):
-    """ dmyplant Engine Class
-        mp  .. MyPlant Object
-        eng .. Pandas Validation Input DataFrame
+    """
+    Class to encapsulate Engine properties & methods
     """
     _sn = 0
     _picklefile = ''
@@ -26,11 +25,12 @@ class Engine(object):
     _d = {}
 
     def __init__(self, mp, eng):
-        """ Engine Constructor
-            load Instance from Pickle File or
-            load Instance Data from Myplant
-            if Myplant Cache Time is passed"""
+        """Engine Constructor
 
+        Args:
+            mp (dmyplant2.Myplant): Myplant class instance
+            eng (pd.dataFrame): Validation engine input data
+        """
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
         self._eng = eng
@@ -72,28 +72,22 @@ class Engine(object):
 
     @property
     def time_since_last_server_contact(self):
-        """
-        get time since last Server contact
+        """get time since last Server contact
+
+        Returns:
+            float: time since last Server contact 
         """
         now = datetime.now().timestamp()
         delta = now - self.__dict__.get('_last_fetch_date', 0.0)
         return delta
 
     def _cache_expired(self):
-        """
-        internal
-        time has since last Server contact
-        returns (delta -> float, passed -> boolean)
-        """
         delta = self.time_since_last_server_contact
         return {'delta': delta, 'bool': delta > self._mp.caching}
 
     def _restructure(self, local_asset):
-        """
-        internal
-        Restructure Asset Data, add Variable
-        Item names as dict key in dataItems & Properties
-        """
+        # restructure downloaded data for easy access
+        # beautiful effective python: dict comprehension :-)
         local_asset['properties'] = {
             p['name']: p for p in local_asset['properties']}
         local_asset['dataItems'] = {
@@ -101,10 +95,6 @@ class Engine(object):
         return local_asset
 
     def _set_oph_parameter(self):
-        """
-        internal
-        Calculate line parameters, oph - line
-        """
         # for the oph(ts) function
         # this function uses the exect date to calculate
         # the interpolation line
@@ -118,31 +108,33 @@ class Engine(object):
                          (self.now_ts - self._valstart_ts))
 
     def oph(self, ts):
-        """
-        linear inter- and extrapolation of oph(t)
-        t -> epoch timestamp
+        """Interpolated Operating hours
+
+        Args:
+            ts (log int): timestamp
+
+        Returns:
+            float: Operating time rel. to Validation start
         """
         y = self._k * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
         return y
 
     def oph2(self, ts):
-        """
-        linear inter- and extrapolation of oph2(t)
-        t -> epoch timestamp
-        uses different parameter calculation method,
-        see _set_oph_parameter function
+        """Interpolated Operating hours, method 2
+
+        Args:
+            ts (log int): timestamp
+
+        Returns:
+            float: Operating time rel. to Validation start
         """
         y = self._k2 * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
         return y
 
     def _engine_data(self, eng) -> dict:
-        """
-        internal
-        Extract basic Engine Data
-        pd.DataFrame eng, Validation Definition
-        """
+        # extract and store important data
         def calc_values(d) -> dict:
             oph_parts = float(d['Count_OpHour']) - float(d['oph@start'])
             d.update({'oph parts': oph_parts})
@@ -165,6 +157,7 @@ class Engine(object):
         self._P = dd['P']
         dd['val start'] = eng['val start']
         dd['oph@start'] = eng['oph@start']
+
         # add calculated items
         dd = calc_values(dd)
         self._valstart_ts = epoch_ts(dd['val start'].timestamp())
@@ -173,10 +166,7 @@ class Engine(object):
         return dd
 
     def _save(self):
-        """
-        internal
-        Persistant data storage to Pickle File
-        """
+        # pickle store object status
         try:
             with open(self._lastcontact, 'wb') as handle:
                 pickle.dump(self._last_fetch_date, handle, protocol=4)
@@ -600,28 +590,29 @@ class Engine(object):
 
 class Engine_SN(Engine):
     """
-    Inherited Read Only Engine Object
-    Constructor uses SerialNumber
-    e.g.: e = EngineReadOnly('1386177')
+    Engine Object with serialNumber constructor
+    inherited from Engine
     """
 
     def __init__(self, mp, sn):
-        """ Engine Constructor
-            load Instance from Pickle File or
-            load Instance Data from Myplant based
-            on SerialNumber
-        """
+        """Constructor Init
 
-        # fake eng record
+        Args:
+            mp (dmyplant2.maplant instance): Myplant Access Function Class
+            sn (string): serialNumber
+        """
+        # minimal eng record to allow myplant data fetch
         eng = {
-            'serialNumber': str(sn), 
-            'Validation Engine': 'Eng SN ' + str(sn),
+            'serialNumber': str(sn),
+            'Validation Engine': 'fake Name',
             'val start': pd.to_datetime('01.01.1970', format='%d.%m.%Y'),
             'oph@start': 0
-        } 
+        }
         super().__init__(mp, eng)
-        # update record from downloaded Data
+
+        # use Myplant Data to update fake variables
         self.Name = self._d['IB Project Name']
         self._eng['Validation Engine'] = self.Name
-        self._eng['val start'] = pd.to_datetime(self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
+        self._eng['val start'] = pd.to_datetime(
+            self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
         self._set_oph_parameter()
