@@ -20,12 +20,28 @@ import matplotlib.dates as dates
 from dmyplant2.dReliability import demonstrated_reliability_sr
 
 
-def idx(n, s, e, x):
+def _idx(n, s, e, x):
     return int(n * (x - s) / (e - s)+1)
 
 
 def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFrame, cl=[10, 50, 90], xmin=None, xmax=None, factor=2.0, ymax=24000):
     """Plot the demonstrated Reliability of the specified validation fleet
+
+    Example:
+
+    ....
+
+    # load input data from files
+    dval = pd.read_csv("input2.csv",sep=';', encoding='utf-8')
+    dval['val start'] = pd.to_datetime(dval['val start'], format='%d.%m.%Y')
+    failures = pd.read_csv("failures.csv",sep=';', encoding='utf-8')
+    failures['date'] = pd.to_datetime(failures['date'], format='%d.%m.%Y')
+
+    dmyplant2.demonstrated_Reliabillity_Plot(vl, 
+            beta=1.21, T=30000, s=1000, ft=failures, cl=[10,50,90], factor=1.3);
+
+    ...
+
 
     Args:
         vl ([dmyplant2.Validation class]): [Class with several function around the validation fleet]
@@ -65,7 +81,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
                                      start_ts, last_ts, beta=beta, size=s, ft=ft)[0]  # timestamp x axis start .. end
 
     # determine the array - index of 'now'
-    n_i = idx(s, start_ts, last_ts, vl.now_ts)
+    n_i = _idx(s, start_ts, last_ts, vl.now_ts)
 
     # create Timerow from Start to 'now'
     n_tr = tr[0:n_i:1]
@@ -186,6 +202,25 @@ def chart(d, ys, x='datetime', title=None, grid=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
 
     example:
+    .....
+
+    dat = {
+        161: 'CountOph', 
+        102: 'PowerAct',
+        107: 'Various_Values_SpeedAct',
+        217: 'Hyd_PressCrankCase',
+        16546: 'Hyd_PressOilDif'
+    }
+
+    df = e.batch_hist_dataItems(
+        itemIds=dat, 
+        p_from=arrow.get('2021-03-05 05:28').to('Europe/Vienna'),
+        p_to=arrow.get('2021-03-05 05:30').to('Europe/Vienna'),
+        timeCycle=1)
+
+
+    # Set Type of time column to DateTime
+    df['CountOph'] = df.CountOph - e.oph_start
 
     dmyplant2.chart(df, [
     {'col': ['PowerAct'],'ylim': [0, 5000]},
@@ -197,6 +232,8 @@ def chart(d, ys, x='datetime', title=None, grid=True, *args, **kwargs):
     title = e,
     grid = False,
     figsize = (14,10))
+
+    .....
 
     Args:
         d ([pd.dataFrame]): [Data , e.g downloaded by engine.batch_hist_dataItems(...)]

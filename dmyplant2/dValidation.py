@@ -43,6 +43,44 @@ class Validation:
         # dashboard as pandas Dataframe
         self._dash = pd.DataFrame(ldash)
 
+    @ classmethod
+    def load_def_csv(cls, filename):
+        """load CSV Validation definition file 
+
+        example content:
+        n;Validation Engine;serialNumber;val start;oph@start;starts@start;Asset ID;Old PU first replaced OPH;Old PUs replaced before upgrade
+        0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378;103791;;
+        ....
+
+        Args:
+            filename ([string]): [Filename of definition file]
+
+        Returns:
+            [pd.dataFrame]: [Validation definition as dataFrame]
+        """        
+        dv = pd.read_csv(filename,sep=';', encoding='utf-8')
+        dv['val start'] = pd.to_datetime(dv['val start'], format='%d.%m.%Y')
+        return dv
+
+    @ classmethod
+    def load_failures_csv(cls, filename):
+        """load CSV Failure Observation file 
+
+        example content:
+        date;failures;serialNumber;comment
+        28.12.2020;1;1319151;München V008 M1 Z8 - Reiber, mit Boroskop am 28.12.2020 festgestellt, Cold Scuff, Motor lief 431 Stunden nach BSI
+        ....
+
+        Args:
+            filename ([string]): [Filename of Failure Observation file]
+
+        Returns:
+            [pd.dataFrame]: [Failure Observations as dataFrame]
+        """ 
+        fl = pd.read_csv(filename,sep=';', encoding='utf-8')
+        fl['date'] = pd.to_datetime(fl['date'], format='%d.%m.%Y')
+        return fl
+
     @ property
     def now_ts(self):
         """the current date as EPOCH timestamp"""
