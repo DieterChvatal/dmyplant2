@@ -598,37 +598,30 @@ class Engine(object):
         return _dash
 
 
-class EngineReadOnly(Engine):
+class Engine_SN(Engine):
     """
     Inherited Read Only Engine Object
     Constructor uses SerialNumber
     e.g.: e = EngineReadOnly('1386177')
     """
 
-    def __init__(self, sn):
+    def __init__(self, mp, sn):
+        """ Engine Constructor
+            load Instance from Pickle File or
+            load Instance Data from Myplant based
+            on SerialNumber
         """
-        ReadOnly Engine Constructor
-        load Instance from Engine Pickle File
-        """
-        self._sn = str(sn)
-        self._picklefile = os.getcwd() + '/data/' + self._sn + '.pkl'
-        try:
-            with open(self._picklefile, 'rb') as handle:
-                self.__dict__ = pickle.load(handle)
-        except FileNotFoundError:
-            logging.debug(f"{self._picklefile} not found.")
 
-
-if __name__ == '__main__':
-    import traceback
-    import dmyplant2
-
-    try:
-        e = EngineReadOnly('1386177')
-        # with open(os.getcwd() + '/data/' + e.serialNumber + '.json', 'w') as fp:
-        #    json.dump(e.asset, fp)
-        print(e.dash)
-
-    except Exception as ex:
-        print(ex)
-        traceback.print_tb(ex.__traceback__)
+        # fake eng record
+        eng = {
+            'serialNumber': str(sn), 
+            'Validation Engine': 'Eng SN ' + str(sn),
+            'val start': pd.to_datetime('01.01.1970', format='%d.%m.%Y'),
+            'oph@start': 0
+        } 
+        super().__init__(mp, eng)
+        # update record from downloaded Data
+        self.Name = self._d['IB Project Name']
+        self._eng['Validation Engine'] = self.Name
+        self._eng['val start'] = pd.to_datetime(self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
+        self._set_oph_parameter()
