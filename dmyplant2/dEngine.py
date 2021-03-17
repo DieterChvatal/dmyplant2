@@ -239,11 +239,11 @@ class Engine(object):
         except:
             pass
 
-    def batch_hist_dataItems(self, itemIds={161: 'CountOph'}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
+    def batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
                              assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
-        dataItemIds         dict   e.g. {161: 'CountOph'}, dict of dataItems to query.
+        dataItemIds         dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
         limit               int64, number of points to download
         p_from              string from iso date or timestamp,
         p_to                string stop iso date or timestamp.
@@ -286,7 +286,7 @@ class Engine(object):
 
             # restructure data to dict
             ds = dict()
-            ds['labels'] = ['time'] + [tdef[x] for x in data['columns'][1]]
+            ds['labels'] = ['time'] + [tdef[x][0] for x in data['columns'][1]]
             ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
                           for r in data['data']]
 
