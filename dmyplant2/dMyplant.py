@@ -151,6 +151,20 @@ class MyPlant(object):
         """
         return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
 
+    def history_batchdata(self, id, itemIds, p_from, p_to, timeCycle=3600):
+        """
+        url: /asset/{assetId}/dataitem/{dataItemId}
+        Parameters:
+        Name	    type    Description
+        assetId     int64   Id of the Asset to query the DateItem for.
+        itemIds     list    list of DataItem Id's.
+        p_from      int64   timestamp start timestamp.
+        p_to        int64   timestamp stop timestamp.
+        timeCycle   int64   interval in seconds.
+        """
+        str_ID = ','.join(itemIds)
+        return self.fetchdata(url=fr"/asset/{id}/history/batchdata?from={p_from}&to={p_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={str_ID}")
+
     def gdi(self, ds, sub_key, data_item_name):
         """Unpack value from Myplant Json datastructure based on key & DataItemName"""
         if sub_key == 'nokey':
