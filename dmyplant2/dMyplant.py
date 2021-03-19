@@ -165,6 +165,7 @@ class MyPlant(object):
         str_ID = ','.join(itemIds)
         return self.fetchdata(url=fr"/asset/{id}/history/batchdata?from={p_from}&to={p_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={str_ID}")
 
+
     def gdi(self, ds, sub_key, data_item_name):
         """Unpack value from Myplant Json datastructure based on key & DataItemName"""
         if sub_key == 'nokey':
