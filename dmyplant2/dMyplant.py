@@ -60,6 +60,28 @@ class MyPlant(object):
         except FileNotFoundError:
             raise
 
+    @ classmethod
+    def load_dataitems_csv(cls, filename):
+        """load CSV dataitems definition file 
+
+        example content:
+        ID;myPlantName;unit
+        52;Exhaust_TempCylAvg;C (high)
+        103;Various_Values_PosTurboBypass;%
+        19079;Exhaust_TCSpeedA;1000/min
+        ....
+
+        Args:
+            filename (string): CSV dataitems definition file
+
+        Returns:
+            dict: CSV dataitems dict
+        """
+        data_req = pd.read_csv("DataItems_Request.csv",
+                               sep=';', encoding='utf-8')
+        dat = {a[0]: [a[1], a[2]] for a in data_req.values}
+        return dat
+
     def deBase64(self, text):
         return base64.b64decode(text).decode('utf-8')
 

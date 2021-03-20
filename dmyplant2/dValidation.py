@@ -38,7 +38,7 @@ class Validation:
             if cui_log:
                 print(log)
 
-        # create dashboard with list comprehension 
+        # create dashboard with list comprehension
         ldash = [e.dash for e in self._engines]
         # dashboard as pandas Dataframe
         self._dash = pd.DataFrame(ldash)
@@ -57,8 +57,8 @@ class Validation:
 
         Returns:
             [pd.dataFrame]: [Validation definition as dataFrame]
-        """        
-        dv = pd.read_csv(filename,sep=';', encoding='utf-8')
+        """
+        dv = pd.read_csv(filename, sep=';', encoding='utf-8')
         dv['val start'] = pd.to_datetime(dv['val start'], format='%d.%m.%Y')
         return dv
 
@@ -76,8 +76,8 @@ class Validation:
 
         Returns:
             [pd.dataFrame]: [Failure Observations as dataFrame]
-        """ 
-        fl = pd.read_csv(filename,sep=';', encoding='utf-8')
+        """
+        fl = pd.read_csv(filename, sep=';', encoding='utf-8')
         fl['date'] = pd.to_datetime(fl['date'], format='%d.%m.%Y')
         return fl
 
