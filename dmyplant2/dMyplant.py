@@ -180,7 +180,7 @@ class MyPlant(object):
         df = pd.DataFrame([])
         while lp_from < p_to.timestamp * 1000:
             print(
-                f"Download Data {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}, end: {arrow.get(p_to).format('DD.MM.YYYY - HH:mm')}", end="", flush=True)
+                f"Download Data {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}, end: {arrow.get(p_to).format('DD.MM.YYYY - HH:mm')}")
             ldata = self.fetchdata(
                 url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
             # restructure data to dict
