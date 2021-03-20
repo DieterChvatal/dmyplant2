@@ -154,7 +154,7 @@ class MyPlant(object):
         """
         return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
 
-    def history_batchdata(self, id, DataItems_Request, p_from, p_to, timeCycle=3600):
+    def history_batchdata(self, id, itemIds, p_from, p_to, timeCycle=3600, cui_log=True):
         """
         url: /asset/{assetId}/dataitem/{dataItemId}
         Parameters:
@@ -164,14 +164,15 @@ class MyPlant(object):
         p_from      int64           timestamp start timestamp in ms.
         p_to        int64           timestamp stop timestamp in ms.
         timeCycle   int64           interval in seconds.
+        cui_log     boolean         report progress on CUI or not
         """
 
         # prepare a komma separated string of DataItemID's
-        itemIds = DataItems_Request.ID.astype(str).to_list()
-        IDS = ','.join(itemIds)
+        tdef = itemIds
+        IDS = ','.join([str(s) for s in tdef.keys()])
 
         # claculate how many full rows can be downloaded per request within the limit
-        rows_per_request = maxdatapoints // DataItems_Request.ID.count()
+        rows_per_request = maxdatapoints // len(tdef)
 
         lp_from = p_from.timestamp * 1000  # Start at p_from
         lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
@@ -179,20 +180,23 @@ class MyPlant(object):
 
         df = pd.DataFrame([])
         while lp_from < p_to.timestamp * 1000:
-            print(
-                f"chunk {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
+            if cui_log:
+                print(
+                    f"chunk {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
             ldata = self.fetchdata(
                 url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
             # restructure data to dict
             ds = dict()
-            ds['labels'] = ['time'] + \
-                DataItems_Request.myPlantName.astype(str).to_list()
+            ds['labels'] = ['time'] + [tdef[x][0] for x in ldata['columns'][1]]
             ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
                           for r in ldata['data']]
 
-            # import to Pandas DataFrame
+            # import data to local Pandas DataFrame
             ldf = pd.DataFrame(ds['data'], columns=ds['labels'])
+
+            # and append each chunk to df
             df = df.append(ldf)
+
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
             lp_to = min((lp_to + rows_per_request *

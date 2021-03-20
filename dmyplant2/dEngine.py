@@ -243,7 +243,7 @@ class Engine(object):
                              assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
-        dataItemIds         dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
+        ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
         limit               int64, number of points to download
         p_from              string from iso date or timestamp,
         p_to                string stop iso date or timestamp.
