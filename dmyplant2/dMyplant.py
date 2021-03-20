@@ -9,7 +9,8 @@ import time
 import pickle
 import pandas as pd
 
-maxdatapoints = 100000 # Datapoints per request, limited by Myplant
+maxdatapoints = 100000  # Datapoints per request, limited by Myplant
+
 
 def epoch_ts(ts) -> float:
     if ts >= 10000000000.0:
@@ -172,30 +173,35 @@ class MyPlant(object):
         # claculate how many full rows can be downloaded per request within the limit
         rows_per_request = maxdatapoints // DataItems_Request.ID.count()
 
-        lp_from = p_from.timestamp * 1000 # Start at p_from
-        lp_to = min((lp_from + rows_per_request * timeCycle * 1000), p_to.timestamp * 1000)
+        lp_from = p_from.timestamp * 1000  # Start at p_from
+        lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
+                    p_to.timestamp * 1000)
 
         df = pd.DataFrame([])
         while lp_from < p_to.timestamp * 1000:
-            print(f"Download Data from {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
-            ldata = self.fetchdata(url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
+            print(
+                f"Download Data {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}, end: {arrow.get(p_to).format('DD.MM.YYYY - HH:mm')", end="", flush=True)
+            ldata = self.fetchdata(
+                url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
             # restructure data to dict
             ds = dict()
-            ds['labels'] = ['time'] + DataItems_Request.myPlantName.astype(str).to_list()
+            ds['labels'] = ['time'] + \
+                DataItems_Request.myPlantName.astype(str).to_list()
             ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
                           for r in ldata['data']]
-          
+
             # import to Pandas DataFrame
             ldf = pd.DataFrame(ds['data'], columns=ds['labels'])
             df = df.append(ldf)
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
-            lp_to = min((lp_to + rows_per_request * timeCycle * 1000), p_to.timestamp * 1000)
+            lp_to = min((lp_to + rows_per_request *
+                         timeCycle * 1000), p_to.timestamp * 1000)
 
             # Addtional Datetime column calculated from timestamp
             df['datetime'] = pd.to_datetime(df['time'] * 1000000)
         return df
-        
+
     def gdi(self, ds, sub_key, data_item_name):
         """Unpack value from Myplant Json datastructure based on key & DataItemName"""
         if sub_key == 'nokey':
