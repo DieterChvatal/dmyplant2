@@ -37,7 +37,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     failures = pd.read_csv("failures.csv",sep=';', encoding='utf-8')
     failures['date'] = pd.to_datetime(failures['date'], format='%d.%m.%Y')
 
-    dmyplant2.demonstrated_Reliabillity_Plot(vl, 
+    dmyplant2.demonstrated_Reliabillity_Plot(vl,
             beta=1.21, T=30000, s=1000, ft=failures, cl=[10,50,90], factor=1.3);
 
     ...
@@ -50,7 +50,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
         s (int, optional): [number of points to plot]. Defaults to 1000.
         ft ([type], optional): [pd.DataFrame with observed failures]. Defaults to pd.DataFrame.
             required Columns: date;failures;serialNumber;comment
-        cl (list, optional): [list with relialibilty lines for specific confidence levels to plot, 
+        cl (list, optional): [list with relialibilty lines for specific confidence levels to plot,
             Numbers between 0 and 100]. Defaults to [10, 50, 90].
         xmin ([timestamp], optional): [left margin of x-axis]. Defaults to None.
         xmax ([timestamp], optional): [right margin of x-axis]. Defaults to None.
@@ -101,7 +101,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     # define the PLOT
     fig, ax1 = plt.subplots(  # pylint: disable=unused-variable
         figsize=(12, 8), constrained_layout=True)
-    #fig, (ax1, ax3) = plt.subplots(2, figsize=(6, 6))
+    # fig, (ax1, ax3) = plt.subplots(2, figsize=(6, 6))
 
     color = 'tab:red'
     ax1.set_xlabel('date')
@@ -145,7 +145,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
 
     # and plot the linearized engine runtime lines vs the 2nd axis
     for e in vl.engines[:]:
-        #print(e.Name, e._d['Engine ID'], e._d['val start'], e._d['oph parts'])
+        # print(e.Name, e._d['Engine ID'], e._d['val start'], e._d['oph parts'])
         # complete interval in color fcal
         y = [e.oph(t) for t in tr]
         ax2.plot(dtr, y, linewidth=0.5, color=fcol)
@@ -192,7 +192,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     #             print("over %s" % curve.get_gid())
 
     # plt.legend()
-    #fig.canvas.mpl_connect('motion_notify_event', on_plot_hover)
+    # fig.canvas.mpl_connect('motion_notify_event', on_plot_hover)
 
     # TATAAAAH!
     plt.show()
@@ -205,7 +205,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     .....
 
     dat = {
-        161: 'CountOph', 
+        161: 'CountOph',
         102: 'PowerAct',
         107: 'Various_Values_SpeedAct',
         217: 'Hyd_PressCrankCase',
@@ -214,7 +214,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
 
     df = mp.hist_data(
         e.id,
-        itemIds=dat, 
+        itemIds=dat,
         p_from=arrow.get('2021-03-05 05:28').to('Europe/Vienna'),
         p_to=arrow.get('2021-03-05 05:30').to('Europe/Vienna'),
         timeCycle=1)
@@ -258,30 +258,32 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
         # Twin the x-axis twice to make independent y-axes.
         axes.append(ax.twinx())
 
+    fig.subplots_adjust(top=0.9)
+    fig.subplots_adjust(left=0.1)
+
     extra_ys = len(axes[2:])
 
     # Make some space on the right side for the extra y-axes.
     if extra_ys > 0:
-        temp = 0.95
-        if extra_ys <= 2:
-            temp = 0.8
-        elif extra_ys <= 4:
-            temp = 0.7
-        if extra_ys >= 5:
-            temp = 0.6
-            #print('you are being ridiculous')
+        if extra_ys > 6:
+            print('you are being ridiculous')
+            raise ValueError('too many Extra Axes')
+        else:
+            temp = 0.9 - extra_ys * 0.05
+
+        # print('you are being ridiculous')
         fig.subplots_adjust(right=temp)
-        right_additive = (0.98-temp)/float(extra_ys)
-    # Move the last y-axis spine over to the right by x% of the width of the axes
-    i = 1.
-    for ax in axes[2:]:
-        ax.spines['right'].set_position(('axes', 1.+right_additive*i))
-        ax.set_frame_on(True)
-        ax.patch.set_visible(False)
-        ax.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-        i += 1.
-    # To make the border of the right-most axis visible, we need to turn the frame
-    # on. This hides the other plots, however, so we need to turn its fill off.
+        right_additive = 0.065 / temp
+
+        # Move the last y-axis spine over to the right by x% of the width of the axes
+        for i, ax in enumerate(axes[2:]):
+            ax.spines['right'].set_position(
+                ('axes', 1.0 + right_additive * (i+1)))
+            ax.set_frame_on(True)
+            ax.patch.set_visible(False)
+            ax.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+        # To make the border of the right-most axis visible, we need to turn the frame
+        # on. This hides the other plots, however, so we need to turn its fill off.
 
     cols = []
     lines = []
@@ -301,7 +303,6 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
                 color = next(cycle(colors))['color']
             lines.append(ax.plot(d[x], d[col],
                                  linestyle=ls, label=col, color=color))
-
             ax.set_ylabel(col, color=color)
             if 'ylim' in y:
                 ax.set_ylim(y['ylim'])
@@ -330,7 +331,6 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     labs = [l.get_label() for l in lns]
     if legend:
         axes[0].legend(lns, labs, loc=0)
-    plt.show()
 
 
 if __name__ == '__main__':
