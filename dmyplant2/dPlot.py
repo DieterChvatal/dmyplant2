@@ -212,15 +212,13 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
         16546: 'Hyd_PressOilDif'
     }
 
-    df = e.batch_hist_dataItems(
+    df = mp.hist_data(
+        e.id,
         itemIds=dat, 
         p_from=arrow.get('2021-03-05 05:28').to('Europe/Vienna'),
         p_to=arrow.get('2021-03-05 05:30').to('Europe/Vienna'),
         timeCycle=1)
 
-
-    # Set Type of time column to DateTime
-    df['CountOph'] = df.CountOph - e.oph_start
 
     dmyplant2.chart(df, [
     {'col': ['PowerAct'],'ylim': [0, 5000]},
@@ -236,11 +234,12 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     .....
 
     Args:
-        d ([pd.dataFrame]): [Data , e.g downloaded by engine.batch_hist_dataItems(...)]
-        ys ([list of dicts]): [the d columns to plot]
-        x (str, optional): [x-axis column as string]. Defaults to 'datetime'.
-        title (str, optional): [Main Title of figure]. Defaults to None.
-        grid (bool, optional): [displaygrid on left axis]. Defaults to True.
+        d (pd.dataFrame): Data , e.g downloaded by engine.batch_hist_dataItems(...)
+        ys ([list of dicts]): the DataFrame d columns to plot
+        x (str, optional): x-axis column as string. Defaults to 'datetime'.
+        title (str, optional): Main Title of figure. Defaults to None.
+        grid (bool, optional): displaygrid on left axis. Defaults to True.
+        legend (bool, optional): legend. Defaults to True.
     """
     # for entry in kwargs.items():
     #     print("Key: {}, value: {}".format(entry[0], entry[1]))
