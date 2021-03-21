@@ -316,7 +316,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
                 cols.append(col)
             llabel = ', '.join(y['col'])
             if len(llabel) > 100:
-                llabel = llabel[:47] + ' ..'
+                llabel = llabel[:97] + ' ..'
             ax.set_ylabel(llabel)
             if 'ylim' in y:
                 ax.set_ylim(y['ylim'])
