@@ -315,7 +315,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
                     ax.plot(d[x], d[col], linestyle=ls, label=col, color=color))
                 cols.append(col)
             llabel = ', '.join(y['col'])
-            if len(llabel) > 50:
+            if len(llabel) > 100:
                 llabel = llabel[:47] + ' ..'
             ax.set_ylabel(llabel)
             if 'ylim' in y:

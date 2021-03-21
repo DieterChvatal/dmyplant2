@@ -182,7 +182,7 @@ class MyPlant(object):
         Parameters:
         Name	    type            Description
         assetId     int64           Id of the Asset to query the DateItem for.
-        itemIds     pd.DataFrame    DataItem Id's, Names & Units
+        itemIds     dict            DataItem Id's, Names & Units
         p_from      int64           timestamp start timestamp in ms.
         p_to        int64           timestamp stop timestamp in ms.
         timeCycle   int64           interval in seconds.
@@ -207,6 +207,7 @@ class MyPlant(object):
                     f"chunk {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
             ldata = self.fetchdata(
                 url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
+
             # restructure data to dict
             ds = dict()
             ds['labels'] = ['time'] + [tdef[x][0] for x in ldata['columns'][1]]
@@ -216,7 +217,7 @@ class MyPlant(object):
             # import data to local Pandas DataFrame
             ldf = pd.DataFrame(ds['data'], columns=ds['labels'])
 
-            # and append each chunk to df
+            # and append each chunk to the return df
             df = df.append(ldf)
 
             # calculate next cycle
@@ -224,8 +225,8 @@ class MyPlant(object):
             lp_to = min((lp_to + rows_per_request *
                          timeCycle * 1000), p_to.timestamp * 1000)
 
-            # Addtional Datetime column calculated from timestamp
-            df['datetime'] = pd.to_datetime(df['time'] * 1000000)
+        # Addtional Datetime column calculated from timestamp
+        df['datetime'] = pd.to_datetime(df['time'] * 1000000)
         return df
 
     def gdi(self, ds, sub_key, data_item_name):
