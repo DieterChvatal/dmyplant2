@@ -225,8 +225,13 @@ class MyPlant(object):
         df = pd.DataFrame([])
         # calculate how many full rows per request within the myplant limit are possible
         rows_per_request = maxdatapoints // len(itemIds)
-        rows_total = (p_to.timestamp - p_from.timestamp) // timeCycle
-        pbar = tqdm(total=rows_total)
+        rows_total = (p_to.timestamp -
+                      p_from.timestamp) / timeCycle
+
+        print(
+            f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total}, {(rows_total * 30) / 3600:0.2f} oph's")
+
+        pbar = tqdm(total=rows_total)  # count in minutes
 
         # initialize loop
         lp_from = p_from.timestamp * 1000  # Start at p_from
@@ -241,11 +246,11 @@ class MyPlant(object):
                 id, itemIds, lp_from, lp_to, timeCycle)
             # and append each chunk to the return df
             df = df.append(ldf)
+            pbar.update(rows_per_request)
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
             lp_to = min((lp_to + rows_per_request *
                          timeCycle * 1000), p_to.timestamp * 1000)
-            pbar.update(rows_per_request)
 
         pbar.close()
         # Addtional Datetime column calculated from timestamp
