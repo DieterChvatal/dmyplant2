@@ -285,7 +285,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
 
     cols = []
     lines = []
-    line_styles = cycle(['-', '-', '-', '--', '-.', ':', '.', ',', 'o', 'v', '^', '<', '>',
+    line_styles = cycle(['-', '-', '-', '--', '-.', ':', 'dotted', ',', 'o', 'v', '^', '<', '>',
                          '1', '2', '3', '4', 's', 'p', '*', 'h', 'H', '+', 'x', 'D', 'd', '|', '_'])
     colors = cycle(matplotlib.rcParams['axes.prop_cycle'])
     for ax, y in zip(axes, ys):
