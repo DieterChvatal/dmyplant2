@@ -5,6 +5,7 @@ import requests
 import logging
 import os
 from datetime import datetime, timedelta
+from tqdm.auto import tqdm
 import time
 import pickle
 import pandas as pd
@@ -62,7 +63,7 @@ class MyPlant(object):
 
     @ classmethod
     def load_dataitems_csv(cls, filename):
-        """load CSV dataitems definition file 
+        """load CSV dataitems definition file
 
         example content:
         ID;myPlantName;unit
@@ -84,6 +85,20 @@ class MyPlant(object):
 
     def deBase64(self, text):
         return base64.b64decode(text).decode('utf-8')
+
+    def gdi(self, ds, sub_key, data_item_name):
+        """Unpack value from Myplant Json datastructure based on key & DataItemName"""
+        if sub_key == 'nokey':
+            return ds.get(data_item_name, None)
+        else:
+            local = {x['value']
+                     for x in ds[sub_key] if x['name'] == data_item_name}
+            return local.pop() if len(local) != 0 else None
+
+    @property
+    def caching(self):
+        """the current cache time"""
+        return self._caching
 
     def login(self):
         """Login to MyPlant"""
@@ -138,7 +153,7 @@ class MyPlant(object):
         except:
             raise
 
-    def asset_data(self, serialNumber):
+    def _asset_data(self, serialNumber):
         """
         Returns an Asset based on its id with all details
         including properties and DataItems.
@@ -176,7 +191,24 @@ class MyPlant(object):
         """
         return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
 
-    def history_batchdata(self, id, itemIds, p_from, p_to, timeCycle=3600, cui_log=True):
+    def _history_batchdata(self, id, itemIds, lp_from, lp_to, timeCycle=3600):
+        # comma separated string of DataItemID's
+        IDS = ','.join([str(s) for s in itemIds.keys()])
+        ldata = self.fetchdata(
+            url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
+        # restructure data to dict
+        ds = dict()
+        ds['labels'] = ['time'] + [itemIds[x][0]
+                                   for x in ldata['columns'][1]]
+        ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
+                      for r in ldata['data']]
+        # import data to Pandas DataFrame and return result
+        df = pd.DataFrame(ds['data'], columns=ds['labels'])
+        return df
+
+    def hist_data(self, id, itemIds, p_from, p_to, timeCycle=3600
+                  # , cui_log=True
+                  ):
         """
         url: /asset/{assetId}/dataitem/{dataItemId}
         Parameters:
@@ -189,68 +221,33 @@ class MyPlant(object):
         cui_log     boolean         report progress on CUI or not
         """
 
-        # prepare a komma separated string of DataItemID's
-        tdef = itemIds
-        IDS = ','.join([str(s) for s in tdef.keys()])
+        # initialize data collector
+        df = pd.DataFrame([])
+        # calculate how many full rows per request within the myplant limit are possible
+        rows_per_request = maxdatapoints // len(itemIds)
+        rows_total = (p_to.timestamp - p_from.timestamp) // timeCycle
+        pbar = tqdm(total=rows_total)
 
-        # claculate how many full rows can be downloaded per request within the limit
-        rows_per_request = maxdatapoints // len(tdef)
-
+        # initialize loop
         lp_from = p_from.timestamp * 1000  # Start at p_from
         lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
                     p_to.timestamp * 1000)
 
-        df = pd.DataFrame([])
         while lp_from < p_to.timestamp * 1000:
-            if cui_log:
-                print(
-                    f"chunk {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
-            ldata = self.fetchdata(
-                url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
-
-            # restructure data to dict
-            ds = dict()
-            ds['labels'] = ['time'] + [tdef[x][0] for x in ldata['columns'][1]]
-            ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
-                          for r in ldata['data']]
-
-            # import data to local Pandas DataFrame
-            ldf = pd.DataFrame(ds['data'], columns=ds['labels'])
-
+            # if cui_log:
+            #     print(
+            #         f"chunk {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
+            ldf = self._history_batchdata(
+                id, itemIds, lp_from, lp_to, timeCycle)
             # and append each chunk to the return df
             df = df.append(ldf)
-
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
             lp_to = min((lp_to + rows_per_request *
                          timeCycle * 1000), p_to.timestamp * 1000)
+            pbar.update(rows_per_request)
 
+        pbar.close()
         # Addtional Datetime column calculated from timestamp
         df['datetime'] = pd.to_datetime(df['time'] * 1000000)
         return df
-
-    def gdi(self, ds, sub_key, data_item_name):
-        """Unpack value from Myplant Json datastructure based on key & DataItemName"""
-        if sub_key == 'nokey':
-            return ds.get(data_item_name, None)
-        else:
-            local = {x['value']
-                     for x in ds[sub_key] if x['name'] == data_item_name}
-            return local.pop() if len(local) != 0 else None
-
-    # def d(self, ts):
-    #     return pd.Timestamp(ts, unit='s')
-
-    # def future_timestamp(self, ts, hours):
-    #     return int(ts + hours * 3600.0)
-
-    # def to_myplant_ts(self, ts):
-    #     return int(ts * 1000.0)
-
-    # def from_myplant_ts(self, ts):
-    #     return int(ts / 1000.0)
-
-    @property
-    def caching(self):
-        """the current cache time"""
-        return self._caching
