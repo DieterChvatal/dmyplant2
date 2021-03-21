@@ -46,7 +46,7 @@ class Engine(object):
         try:
             # fetch data from Myplant only on conditions below
             if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
-                local_asset = self._mp.asset_data(self._sn)
+                local_asset = self._mp._asset_data(self._sn)
                 logging.debug(
                     f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
                 self.asset = self._restructure(local_asset)
