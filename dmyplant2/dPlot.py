@@ -269,7 +269,8 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
         elif extra_ys <= 4:
             temp = 0.7
         if extra_ys > 5:
-            print('you are being ridiculous')
+            temp = 0.6
+            #print('you are being ridiculous')
         fig.subplots_adjust(right=temp)
         right_additive = (0.98-temp)/float(extra_ys)
     # Move the last y-axis spine over to the right by x% of the width of the axes
