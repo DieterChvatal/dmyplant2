@@ -267,7 +267,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
             temp = 0.8
         elif extra_ys <= 4:
             temp = 0.7
-        if extra_ys > 5:
+        if extra_ys >= 5:
             temp = 0.6
             #print('you are being ridiculous')
         fig.subplots_adjust(right=temp)
@@ -285,8 +285,10 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
 
     cols = []
     lines = []
-    line_styles = cycle(['-', '-', '-', '--', '-.', ':', 'dotted', ',', 'o', 'v', '^', '<', '>',
-                         '1', '2', '3', '4', 's', 'p', '*', 'h', 'H', '+', 'x', 'D', 'd', '|', '_'])
+    # line_styles = cycle(['-', '-', '-', '--', '-.', ':', 'dotted', ',', 'o', 'v', '^', '<', '>',
+    #                     '1', '2', '3', '4', 's', 'p', '*', 'h', 'H', '+', 'x', 'D', 'd', '|', '_'])
+    line_styles = cycle(['-', '-', '-', '--', '-.', ':'])
+
     colors = cycle(matplotlib.rcParams['axes.prop_cycle'])
     for ax, y in zip(axes, ys):
         ls = next(cycle(line_styles))
