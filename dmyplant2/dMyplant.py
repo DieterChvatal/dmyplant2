@@ -201,9 +201,9 @@ class MyPlant(object):
         ldata = self.fetchdata(
             url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
 
-        import json
-        with open(fr"{id}_{lp_from}_{timeCycle}.json", 'w') as f:
-            json.dump(ldata, f)
+        # import json
+        # with open(fr"{id}_{lp_from}_{timeCycle}.json", 'w') as f:
+        #     json.dump(ldata, f)
 
         # restructure data to dict
         ds = dict()
@@ -238,7 +238,7 @@ class MyPlant(object):
                       p_from.timestamp) / timeCycle
 
         print(
-            f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total}, {(rows_total * timeCycle) / 3600:0.2f} oph's")
+            f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total:0.0f}")
 
         pbar = tqdm(total=rows_total)  # count in minutes
 
