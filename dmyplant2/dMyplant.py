@@ -100,6 +100,10 @@ class MyPlant(object):
         """the current cache time"""
         return self._caching
 
+    @property
+    def username(self):
+        return self.deBase64(self._name)
+
     def login(self):
         """Login to MyPlant"""
         if self._session is None:
@@ -196,6 +200,11 @@ class MyPlant(object):
         IDS = ','.join([str(s) for s in itemIds.keys()])
         ldata = self.fetchdata(
             url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
+
+        import json
+        with open(fr"{id}_{lp_from}_{timeCycle}.json", 'w') as f:
+            json.dump(ldata, f)
+
         # restructure data to dict
         ds = dict()
         ds['labels'] = ['time'] + [itemIds[x][0]
@@ -229,7 +238,7 @@ class MyPlant(object):
                       p_from.timestamp) / timeCycle
 
         print(
-            f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total}, {(rows_total * 30) / 3600:0.2f} oph's")
+            f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total}, {(rows_total * timeCycle) / 3600:0.2f} oph's")
 
         pbar = tqdm(total=rows_total)  # count in minutes
 
