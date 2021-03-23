@@ -240,8 +240,8 @@ class MyPlant(object):
         rows_total = (p_to.timestamp -
                       p_from.timestamp) / timeCycle
 
-        print(
-            f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total:0.0f}")
+        #print(
+        #    f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total:0.0f}")
 
         pbar = tqdm(total=rows_total)  # count in minutes
 

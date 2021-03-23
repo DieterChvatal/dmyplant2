@@ -490,7 +490,7 @@ class Engine(object):
             '612': 0.986
         }
         lkey = self.get_property('Engine Type')
-        return el_eff[lkey]
+        return el_eff[lkey] or 0.95
 
     @ property
     def Pmech_nominal(self):
@@ -504,7 +504,16 @@ class Engine(object):
         """
         Nominal Speed in [rp/m]
         """
-        return self.get_dataItem('Para_Speed_Nominal')
+        speed = {
+            '3': 1500.0,
+            '4': 1500.0,
+            '5': 1500.0,
+            '6': 1500.0,
+            '9': 1000.0
+        }
+        lkey = self.get_property('Engine Type')[:1]
+        return speed[lkey]
+        #return self.get_dataItem('Para_Speed_Nominal')
 
     @ property
     def BMEP(self):
