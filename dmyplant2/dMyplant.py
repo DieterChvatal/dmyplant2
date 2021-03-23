@@ -201,17 +201,12 @@ class MyPlant(object):
             IDS = ','.join([str(s) for s in itemIds.keys()])
             ldata = self.fetchdata(
                 url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
-
-            # import json
-            # with open(fr"{id}_{lp_from}_{timeCycle}.json", 'w') as f:
-            #     json.dump(ldata, f)
-
             # restructure data to dict
             ds = dict()
             ds['labels'] = ['time'] + [itemIds[x][0]
-                                       for x in ldata['columns'][1]]
+                                    for x in ldata['columns'][1]]
             ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
-                          for r in ldata['data']]
+                        for r in ldata['data']]
             # import data to Pandas DataFrame and return result
             df = pd.DataFrame(ds['data'], columns=ds['labels'])
             return df
@@ -233,27 +228,31 @@ class MyPlant(object):
         cui_log     boolean         report progress on CUI or not
         """
 
-        # initialize data collector
+
+        # initialize a data collector
         df = pd.DataFrame([])
+
+        fn = fr"./data/{id}_{p_from.timestamp}_{timeCycle}_00.hdf"
+
+        if os.path.exists(fn):
+            df = pd.read_hdf(fn,"data")
+            #Check last lp_to in the file and update the file ....
+            last_p_to = arrow.get(list(df['time'][-2:-1])[0]  + timeCycle)
+            #new starting point ...
+            p_from = last_p_to
+
         # calculate how many full rows per request within the myplant limit are possible
         rows_per_request = maxdatapoints // len(itemIds)
-        rows_total = (p_to.timestamp -
-                      p_from.timestamp) / timeCycle
-
-        #print(
-        #    f"Rows per Request: {rows_per_request}, cycle per row: {timeCycle} s, total rows: {rows_total:0.0f}")
-
-        pbar = tqdm(total=rows_total)  # count in minutes
+        rows_total = (p_to.timestamp - p_from.timestamp) // timeCycle
+        pbar = tqdm(total=rows_total)
 
         # initialize loop
-        lp_from = p_from.timestamp * 1000  # Start at p_from
+        lp_from = p_from.timestamp * 1000  # Start at lp_from
         lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
                     p_to.timestamp * 1000)
 
         while lp_from < p_to.timestamp * 1000:
-            # if cui_log:
-            #     print(
-            #         f"chunk {arrow.get(lp_from).format('DD.MM.YYYY - HH:mm')} to {arrow.get(lp_to).format('DD.MM.YYYY - HH:mm')}")
+            # for now assume same itemID's are always included ... need to be included in a check
             ldf = self._history_batchdata(
                 id, itemIds, lp_from, lp_to, timeCycle)
             # and append each chunk to the return df
@@ -262,9 +261,11 @@ class MyPlant(object):
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
             lp_to = min((lp_to + rows_per_request *
-                         timeCycle * 1000), p_to.timestamp * 1000)
-
+                        timeCycle * 1000), p_to.timestamp * 1000)
         pbar.close()
         # Addtional Datetime column calculated from timestamp
         df['datetime'] = pd.to_datetime(df['time'] * 1000000)
+        
+        # save to file
+        df.to_hdf(fn,"data", complevel=6)
         return df
