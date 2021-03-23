@@ -224,7 +224,7 @@ class Engine(object):
 
     def batch_hist_dataItem(self, itemId, p_from, p_to, timeCycle=3600):
         """
-        Get np.array of dataItem history
+        Get np.array of a single dataItem history
         dataItemId  int64   Id of the DataItem to query.
         p_from      int64   timestamp start timestamp.
         p_to        int64   timestamp stop timestamp.
@@ -244,7 +244,7 @@ class Engine(object):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
-        limit               int64, number of points to download
+        p_limit             number of datapoints back from "now".
         p_from              string from iso date or timestamp,
         p_to                string stop iso date or timestamp.
         timeCycle           int64  interval in seconds.
