@@ -196,24 +196,27 @@ class MyPlant(object):
         return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
 
     def _history_batchdata(self, id, itemIds, lp_from, lp_to, timeCycle=3600):
-        # comma separated string of DataItemID's
-        IDS = ','.join([str(s) for s in itemIds.keys()])
-        ldata = self.fetchdata(
-            url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
+        try:
+            # comma separated string of DataItemID's
+            IDS = ','.join([str(s) for s in itemIds.keys()])
+            ldata = self.fetchdata(
+                url=fr"/asset/{id}/history/batchdata?from={lp_from}&to={lp_to}&timeCycle={timeCycle}&assetType=J-Engine&includeMinMax=false&forceDownSampling=false&dataItemIds={IDS}")
 
-        # import json
-        # with open(fr"{id}_{lp_from}_{timeCycle}.json", 'w') as f:
-        #     json.dump(ldata, f)
+            # import json
+            # with open(fr"{id}_{lp_from}_{timeCycle}.json", 'w') as f:
+            #     json.dump(ldata, f)
 
-        # restructure data to dict
-        ds = dict()
-        ds['labels'] = ['time'] + [itemIds[x][0]
-                                   for x in ldata['columns'][1]]
-        ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
-                      for r in ldata['data']]
-        # import data to Pandas DataFrame and return result
-        df = pd.DataFrame(ds['data'], columns=ds['labels'])
-        return df
+            # restructure data to dict
+            ds = dict()
+            ds['labels'] = ['time'] + [itemIds[x][0]
+                                       for x in ldata['columns'][1]]
+            ds['data'] = [[r[0]] + [rr[0] for rr in r[1]]
+                          for r in ldata['data']]
+            # import data to Pandas DataFrame and return result
+            df = pd.DataFrame(ds['data'], columns=ds['labels'])
+            return df
+        except:
+            raise
 
     def hist_data(self, id, itemIds, p_from, p_to, timeCycle=3600
                   # , cui_log=True

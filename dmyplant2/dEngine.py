@@ -239,8 +239,28 @@ class Engine(object):
         except:
             pass
 
-    def batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                             assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
+    def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
+        """
+        Get pandas dataFrame of dataItems history, either limit or From & to are required
+        ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
+        limit               int64, number of points to download
+        p_from              string from iso date or timestamp,
+        p_to                string stop iso date or timestamp.
+        timeCycle           int64  interval in seconds.
+        assetType           string default 'J-Engine'
+        includeMinMax       string 'false'
+        forceDownSampling   string 'false'
+        """
+        try:
+            dres = self._mp.hist_data(
+                self.id, itemIds, p_from, p_to, timeCycle)
+            return dres
+        except ValueError(" Engine hist_data Error"):
+            pass
+
+    def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
+                              assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
