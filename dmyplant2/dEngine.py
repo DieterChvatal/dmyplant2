@@ -12,7 +12,7 @@ import json
 import arrow
 
 
-class Engine(object):
+class Engine:
     """
     Class to encapsulate Engine properties & methods
     """
@@ -23,6 +23,7 @@ class Engine(object):
     _k = None
     _P = 0.0
     _d = {}
+    _info = {}
 
     def __init__(self, mp, eng):
         """Engine Constructor
@@ -37,12 +38,28 @@ class Engine(object):
         self._sn = str(eng['serialNumber'])
         fname = os.getcwd() + '/data/' + self._sn
         self._picklefile = fname + '.pkl'    # load persitant data
-        self._lastcontact = fname + '_lastcontact.pkl'
+        #self._lastcontact = fname + '_lastcontact.pkl'
+        self._infofile = fname + '.json'
+
+        # lastcontact
+        # try:
+        #     with open(self._lastcontact, 'rb') as handle:
+        #         self._last_fetch_date = pickle.load(handle)
+        # except:
+        #     pass
+
+        # load info json & lstfetchdate
         try:
-            with open(self._lastcontact, 'rb') as handle:
-                self._last_fetch_date = pickle.load(handle)
+            with open(self._infofile) as f:
+                self._info = json.load(f)
+                if 'last_fetch_date' in self._info:
+                    self._last_fetch_date = self._info['last_fetch_date']
+                self._info = {**self._info, **self._eng}
+                self._info['val start'] = arrow.get(
+                    self._eng['val start']).timestamp
         except:
             pass
+
         try:
             # fetch data from Myplant only on conditions below
             if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
@@ -167,12 +184,21 @@ class Engine(object):
 
     def _save(self):
         # pickle store object status
+        # try:
+        #     with open(self._lastcontact, 'wb') as handle:
+        #         pickle.dump(self._last_fetch_date, handle, protocol=4)
+        # except FileNotFoundError:
+        #     errortext = f'File {self._lastcontact} not found.'
+        #     logging.error(errortext)
+
         try:
-            with open(self._lastcontact, 'wb') as handle:
-                pickle.dump(self._last_fetch_date, handle, protocol=4)
+            self._info['last_fetch_date'] = self._last_fetch_date
+            with open(self._infofile, 'w') as f:
+                json.dump(self._info, f)
         except FileNotFoundError:
-            errortext = f'File {self._lastcontact} not found.'
+            errortext = f'File {self._infofile} not found.'
             logging.error(errortext)
+
         try:
             with open(self._picklefile, 'wb') as handle:
                 pickle.dump(self.__dict__, handle, protocol=4)
@@ -253,9 +279,22 @@ class Engine(object):
         forceDownSampling   string 'false'
         """
         try:
-            dres = self._mp.hist_data(
+
+            fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_00.hdf"
+            if os.path.exists(fn):
+                df = pd.read_hdf(fn, "data")
+                # Check last lp_to in the file and update the file ....
+                last_p_to = arrow.get(list(df['time'][-2:-1])[0] + timeCycle)
+                # new starting point ...
+                p_from = last_p_to
+
+            df = self._mp.hist_data(
                 self.id, itemIds, p_from, p_to, timeCycle)
-            return dres
+
+            # save to file
+            df.to_hdf(fn, "data", complevel=6)
+
+            return df
         except ValueError(" Engine hist_data Error"):
             pass
 
@@ -513,7 +552,7 @@ class Engine(object):
         }
         lkey = self.get_property('Engine Type')[:1]
         return speed[lkey]
-        #return self.get_dataItem('Para_Speed_Nominal')
+        # return self.get_dataItem('Para_Speed_Nominal')
 
     @ property
     def BMEP(self):
@@ -630,18 +669,44 @@ class Engine_SN(Engine):
             mp (dmyplant2.maplant instance): Myplant Access Function Class
             sn (string): serialNumber
         """
+        self._info = {}
+        fname = os.getcwd() + '/data/' + sn
+        self._infofile = fname + '.json'
+
+        # load info json & lstfetchdate
+        try:
+            with open(self._infofile) as f:
+                self._info = json.load(f)
+                self._info['val start'] = pd.to_datetime(
+                    self._info['val start'])
+        except:
+            pass
+
         # minimal eng record to allow myplant data fetch
-        eng = {
-            'serialNumber': str(sn),
-            'Validation Engine': 'fake Name',
-            'val start': pd.to_datetime('01.01.1970', format='%d.%m.%Y'),
-            'oph@start': 0
-        }
-        super().__init__(mp, eng)
+        # eng = {
+        #     'serialNumber': str(sn),
+        #     'Validation Engine': 'fake Name',
+        #     'val start': pd.to_datetime('01.01.1970', format='%d.%m.%Y'),
+        #     'oph@start': 0
+        # }
+        super().__init__(mp, self._info)
 
         # use Myplant Data to update fake variables
-        self.Name = self._d['IB Project Name']
-        self._eng['Validation Engine'] = self.Name
-        self._eng['val start'] = pd.to_datetime(
-            self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
+        # self.Name = self._d['IB Project Name']
+        # self._eng['Validation Engine'] = self.Name
+        #     self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
+
         self._set_oph_parameter()
+
+
+# #del desc['oph parts']
+# #del desc['val start']
+# #del desc['oph@start']
+# desc['Timezone'] = 'Europe/Vienna'
+# desc['p_from'] = lfrom
+# desc['p_to'] = lto
+# desc['timeCycle'] = cycle
+# desc['Exported_By'] = mp.username
+# desc['Export_Date'] = arrow.now().to(
+#     'Europe/Vienna').format('DD.MM.YYYY - HH:mm')
+# desc['dataItems'] = dat
