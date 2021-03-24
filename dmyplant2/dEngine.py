@@ -280,6 +280,7 @@ class Engine:
         """
         try:
 
+            df = pd.DataFrame([])
             fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_00.hdf"
             if os.path.exists(fn):
                 df = pd.read_hdf(fn, "data")
@@ -288,8 +289,9 @@ class Engine:
                 # new starting point ...
                 p_from = last_p_to
 
-            df = self._mp.hist_data(
+            ndf = self._mp.hist_data(
                 self.id, itemIds, p_from, p_to, timeCycle)
+            df = df.append(ndf)
 
             # save to file
             df.to_hdf(fn, "data", complevel=6)
