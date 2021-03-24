@@ -38,7 +38,7 @@ class Engine:
         self._sn = str(eng['serialNumber'])
         fname = os.getcwd() + '/data/' + self._sn
         self._picklefile = fname + '.pkl'    # load persitant data
-        #self._lastcontact = fname + '_lastcontact.pkl'
+        # self._lastcontact = fname + '_lastcontact.pkl'
         self._infofile = fname + '.json'
 
         # lastcontact
@@ -92,7 +92,7 @@ class Engine:
         """get time since last Server contact
 
         Returns:
-            float: time since last Server contact 
+            float: time since last Server contact
         """
         now = datetime.now().timestamp()
         delta = now - self.__dict__.get('_last_fetch_date', 0.0)
@@ -294,6 +294,17 @@ class Engine:
             df = df.append(ndf)
 
             # save to file
+            info = self._info
+            info['p_from'] = p_from
+            info['p_to'] = p_to
+            info['Timezone'] = 'Europe/Vienna'
+            info['timeCycle'] = timeCycle
+            info['Exported_By'] = self._mp.username
+            info['Export_Date'] = arrow.now().to(
+                'Europe/Vienna').format('DD.MM.YYYY - HH:mm')
+            info['dataItems'] = itemIds
+            dinfo = pd.DataFrame.from_dict(info)
+            dinfo.to_hdf(fn, "info", complevel=6)
             df.to_hdf(fn, "data", complevel=6)
 
             return df
