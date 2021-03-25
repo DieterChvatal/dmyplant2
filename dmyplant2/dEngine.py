@@ -690,10 +690,13 @@ class Engine_SN(Engine):
         try:
             with open(self._infofile) as f:
                 self._info = json.load(f)
+                self._info['serialNumber'] = int(sn)
                 self._info['val start'] = pd.to_datetime(
                     self._info['val start'])
-        except:
-            pass
+        except FileNotFoundError: 
+            raise
+        except ValueError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
+            raise
 
         # minimal eng record to allow myplant data fetch
         # eng = {
@@ -710,16 +713,3 @@ class Engine_SN(Engine):
         #     self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
 
         self._set_oph_parameter()
-
-
-# #del desc['oph parts']
-# #del desc['val start']
-# #del desc['oph@start']
-# desc['Timezone'] = 'Europe/Vienna'
-# desc['p_from'] = lfrom
-# desc['p_to'] = lto
-# desc['timeCycle'] = cycle
-# desc['Exported_By'] = mp.username
-# desc['Export_Date'] = arrow.now().to(
-#     'Europe/Vienna').format('DD.MM.YYYY - HH:mm')
-# desc['dataItems'] = dat
