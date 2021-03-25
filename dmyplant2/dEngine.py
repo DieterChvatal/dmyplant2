@@ -308,7 +308,7 @@ class Engine:
             df.to_hdf(fn, "data", complevel=6)
 
             return df
-        except ValueError(" Engine hist_data Error"):
+        except ValueError(" Engine hist_data Error - check itemids format"):
             pass
 
     def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
@@ -693,7 +693,7 @@ class Engine_SN(Engine):
                 self._info['serialNumber'] = int(sn)
                 self._info['val start'] = pd.to_datetime(
                     self._info['val start'])
-        except FileNotFoundError: 
+        except FileNotFoundError:
             raise
         except ValueError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
             raise

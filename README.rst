@@ -119,7 +119,7 @@ login and credentials in the command window:
   Password: xxxxxxxx
 
 
-basic help is available in the pythone REPL:
+basic help is available in the python REPL:
 ::
   import dmyplant2
   help(dmyplant2)
