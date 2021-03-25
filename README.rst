@@ -53,62 +53,62 @@ create an **input.csv** file with your myplant assets in your working directory,
 
 create a python file **main.py** in your working directory:
 ::
-import dmyplant2
-import pandas as pd
-import numpy as np
-import logging
-import sys
-import traceback
+  import dmyplant2
+  import pandas as pd
+  import numpy as np
+  import logging
+  import sys
+  import traceback
 
-global DEBUG
-DEBUG = False
+  global DEBUG
+  DEBUG = False
 
-logging.basicConfig(
-    filename='dmyplant.log',
-    filemode='w',
-    format='%(asctime)s %(levelname)s, %(message)s',
-    level=logging.INFO
-)
-hdlr = logging.StreamHandler(sys.stdout)
-logging.getLogger().addHandler(hdlr)
-
-
-def main():
-    try:
-        logging.info('---')
-        logging.info('dMyplant demo app started')
-
-        # load input data from files
-        dval = dmyplant2.Validation.load_def_csv("input2.csv")
-
-        # ask & store credentials
-        dmyplant2.cred()
-
-        # myplant instance
-        mp = dmyplant2.MyPlant(600) #parameter seconds to cache values e.g. 600 for 10 minutes or 0 to force reload
-
-        # validation instance
-        vl = dmyplant2.Validation(mp,dval, cui_log=False)
-
-        # call dashboard
-        d=vl.dashboard
-        print('\nDashboard:')
-        print(d, '\n')
-
-        logging.info('dMyplant demo app completed.')
-        logging.info('---')
-
-    except Exception as e:
-        print(e)
-        if DEBUG:
-            traceback.print_tb(e.__traceback__)
-    finally:
-        hdlr.close()
-        logging.getLogger().removeHandler(hdlr)
+  logging.basicConfig(
+      filename='dmyplant.log',
+      filemode='w',
+      format='%(asctime)s %(levelname)s, %(message)s',
+      level=logging.INFO
+  )
+  hdlr = logging.StreamHandler(sys.stdout)
+  logging.getLogger().addHandler(hdlr)
 
 
-if __name__ == '__main__':
-    main()
+  def main():
+      try:
+          logging.info('---')
+          logging.info('dMyplant demo app started')
+
+          # load input data from files
+          dval = dmyplant2.Validation.load_def_csv("input2.csv")
+
+          # ask & store credentials
+          dmyplant2.cred()
+
+          # myplant instance
+          mp = dmyplant2.MyPlant(600) #parameter seconds to cache values e.g. 600 for 10 minutes or 0 to force reload
+
+          # validation instance
+          vl = dmyplant2.Validation(mp,dval, cui_log=False)
+
+          # call dashboard
+          d=vl.dashboard
+          print('\nDashboard:')
+          print(d, '\n')
+
+          logging.info('dMyplant demo app completed.')
+          logging.info('---')
+
+      except Exception as e:
+          print(e)
+          if DEBUG:
+              traceback.print_tb(e.__traceback__)
+      finally:
+          hdlr.close()
+          logging.getLogger().removeHandler(hdlr)
+
+
+  if __name__ == '__main__':
+      main()
     
  
 During the first run and every following 31 days, you are prompted for your myplant
