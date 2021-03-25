@@ -79,7 +79,7 @@ create a python file **main.py** in your working directory:
           logging.info('dMyplant demo app started')
 
           # load input data from files
-          dval = dmyplant2.Validation.load_def_csv("input2.csv")
+          dval = dmyplant2.Validation.load_def_csv("input.csv")
 
           # ask & store credentials
           dmyplant2.cred()
