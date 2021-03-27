@@ -386,7 +386,7 @@ class Engine:
     def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
         Get pandas dataFrame of Events history, either limit or From & to are required
-        p_severities        list   
+        p_severities        list
                                 500,600,650 ... operational messages
                                 700         ... warnings
                                 800         ... alarms
@@ -706,7 +706,7 @@ class Engine_SN(Engine):
                 self._info['serialNumber'] = int(sn)
                 self._info['val start'] = pd.to_datetime(
                     self._info['val start'])
-        except FileNotFoundError:
+        except FileNotFoundError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
             raise
         except ValueError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
             raise
