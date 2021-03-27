@@ -706,7 +706,7 @@ class Engine_SN(Engine):
                 self._info['serialNumber'] = int(sn)
                 self._info['val start'] = pd.to_datetime(
                     self._info['val start'])
-        except FileNotFoundError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
+        except FileNotFoundError:
             raise
         except ValueError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
             raise
