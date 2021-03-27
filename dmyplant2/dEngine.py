@@ -304,6 +304,7 @@ class Engine:
             ndf = self._mp.hist_data(
                 self.id, itemIds, p_from, p_to, timeCycle)
             df = df.append(ndf)
+            df.reset_index(drop=True, inplace=True)
 
             # save to file
             info = self._info
