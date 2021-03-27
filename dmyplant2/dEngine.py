@@ -266,7 +266,7 @@ class Engine:
             pass
 
     def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
@@ -277,17 +277,29 @@ class Engine:
         assetType           string default 'J-Engine'
         includeMinMax       string 'false'
         forceDownSampling   string 'false'
+        slot                int     dataset differentiator, defaults to 0
         """
         try:
-
             df = pd.DataFrame([])
-            fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_00.hdf"
+            fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_{slot:02d}.hdf"
+            print(fn)
             if os.path.exists(fn):
-                df = pd.read_hdf(fn, "data")
-                # Check last lp_to in the file and update the file ....
-                last_p_to = arrow.get(list(df['time'][-2:-1])[0] + timeCycle)
-                # new starting point ...
-                p_from = last_p_to
+                try:
+                    dinfo = pd.read_hdf(fn, "info")
+                    fdset = set(dinfo.to_dict()['dataItems'])
+                    ldset = set(itemIds)
+                    # wenn die daten im file den angeforderten daten entsprechen ...
+                    if ldset == fdset:
+                        df = pd.read_hdf(fn, "data")
+                        # Check last lp_to in the file and update the file ....
+                        last_p_to = arrow.get(
+                            list(df['time'][-2:-1])[0] + timeCycle)
+                        # new starting point ...
+                        print(
+                            f"\nitemIds: {ldset},\n{p_from} to \n{last_p_to} loaded from \n{fn}\n")
+                        p_from = last_p_to
+                except:
+                    pass
 
             ndf = self._mp.hist_data(
                 self.id, itemIds, p_from, p_to, timeCycle)
