@@ -58,8 +58,7 @@ class Engine:
                 self._info['val start'] = arrow.get(
                     self._eng['val start']).timestamp
         except:
-            pass
-
+            self._info = {**self._info, **self._eng}
         try:
             # fetch data from Myplant only on conditions below
             if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
@@ -193,6 +192,9 @@ class Engine:
 
         try:
             self._info['last_fetch_date'] = self._last_fetch_date
+            self._info['Validation Engine'] = self._d['IB Project Name']
+            self._info['val start'] = arrow.get(
+                self._info['val start']).format('YYYY-MM-DD')
             with open(self._infofile, 'w') as f:
                 json.dump(self._info, f)
         except FileNotFoundError:
@@ -279,34 +281,9 @@ class Engine:
         forceDownSampling   string 'false'
         slot                int     dataset differentiator, defaults to 0
         """
-        try:
-            df = pd.DataFrame([])
-            fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_{slot:02d}.hdf"
-            print(fn)
-            if os.path.exists(fn):
-                try:
-                    dinfo = pd.read_hdf(fn, "info")
-                    fdset = set(dinfo.to_dict()['dataItems'])
-                    ldset = set(itemIds)
-                    # wenn die daten im file den angeforderten daten entsprechen ...
-                    if ldset == fdset:
-                        df = pd.read_hdf(fn, "data")
-                        # Check last lp_to in the file and update the file ....
-                        last_p_to = arrow.get(
-                            list(df['time'][-2:-1])[0] + timeCycle)
-                        # new starting point ...
-                        print(
-                            f"\nitemIds: {ldset},\n{p_from} to \n{last_p_to} loaded from \n{fn}\n")
-                        p_from = last_p_to
-                except:
-                    pass
 
-            ndf = self._mp.hist_data(
-                self.id, itemIds, p_from, p_to, timeCycle)
-            df = df.append(ndf)
-            df.reset_index(drop=True, inplace=True)
-
-            # save to file
+        def collect_info():
+            # File Metadata
             info = self._info
             info['p_from'] = p_from
             info['p_to'] = p_to
@@ -316,7 +293,46 @@ class Engine:
             info['Export_Date'] = arrow.now().to(
                 'Europe/Vienna').format('DD.MM.YYYY - HH:mm')
             info['dataItems'] = itemIds
-            dinfo = pd.DataFrame.from_dict(info)
+            return pd.DataFrame.from_dict(info)
+
+        def check_and_loadfile(p_from, fn):
+            ldf = pd.DataFrame([])
+            last_p_to = p_from
+            if os.path.exists(fn):
+                try:
+                    dinfo = pd.read_hdf(fn, "info").to_dict()
+                    # wenn die daten im file den angeforderten daten entsprechen ...
+                    if set(itemIds) == set(dinfo['dataItems']):
+                        ffrom = list(dinfo['p_from'].values())[0]
+                        if ffrom.to('Europe/Vienna') <= p_from.to('Europe/Vienna'):
+                            ldf = pd.read_hdf(fn, "data")
+                            os.remove(fn)
+                            # Check last lp_to in the file and update the file ....
+                            last_p_to = arrow.get(
+                                list(ldf['time'][-2:-1])[0]).to('Europe/Vienna')
+                            # list(ldf['time'][-2:-1])[0] + timeCycle)
+                            # new starting point ...
+                            print(
+                                f"\nitemIds: {set(itemIds)},\n{ldf.shape}\nfrom: {p_from.format('DD.MM.YYYY - HH:mm')}\nto:   {last_p_to.format('DD.MM.YYYY - HH:mm')}\n{fn}\n")
+                except:
+                    pass
+            return ldf, last_p_to
+
+        try:
+            df = pd.DataFrame([])
+            # fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_{slot:02d}.hdf"
+            fn = fr"./data/{self._sn}_{timeCycle}_{slot:02d}.hdf"
+            df, np_from = check_and_loadfile(p_from, fn)
+
+            np_to = arrow.get(p_to).shift(seconds=-timeCycle)
+            if np_from.to('Europe/Vienna') < np_to.to('Europe/Vienna'):
+                ndf = self._mp.hist_data(
+                    self.id, itemIds, np_from, p_to, timeCycle)
+                df = df.append(ndf)
+
+            df.reset_index(drop=True, inplace=True)
+
+            dinfo = collect_info()
             dinfo.to_hdf(fn, "info", complevel=6)
             df.to_hdf(fn, "data", complevel=6)
 
@@ -695,34 +711,39 @@ class Engine_SN(Engine):
             mp (dmyplant2.maplant instance): Myplant Access Function Class
             sn (string): serialNumber
         """
-        self._info = {}
-        fname = os.getcwd() + '/data/' + sn
+        eng = {}
+        fname = os.getcwd() + '/data/' + str(sn)
         self._infofile = fname + '.json'
 
         # load info json & lstfetchdate
         try:
             with open(self._infofile) as f:
-                self._info = json.load(f)
-                self._info['serialNumber'] = int(sn)
-                self._info['val start'] = pd.to_datetime(
-                    self._info['val start'])
+                eng = json.load(f)
+                eng['serialNumber'] = int(sn)
+                # if no 'val start' in json, fake it ...
+                if not 'val start' in eng:
+                    eng['val start'] = '2000-01-01'
+                # if no 'n' in json, fake it ...
+                if not 'n' in eng:
+                    eng['n'] = 0
         except FileNotFoundError:
-            raise
-        except ValueError("Engine_SN was called without prior call to Engine Base Object,\n so not all required information is stored in ./data/##SN.json.\nPlease run a full val engines download using e.g. input.csv definition first,\n see example on github"):
-            raise
+            # minimal info record to allow myplant
+            # to fetch data for a never conatacted engine
+            eng = {
+                'n': 0,
+                'serialNumber': int(sn),
+                'Validation Engine': 'fake Name',
+                'val start': '2000-01-01',
+                'oph@start': 0
+            }
 
-        # minimal eng record to allow myplant data fetch
-        # eng = {
-        #     'serialNumber': str(sn),
-        #     'Validation Engine': 'fake Name',
-        #     'val start': pd.to_datetime('01.01.1970', format='%d.%m.%Y'),
-        #     'oph@start': 0
-        # }
-        super().__init__(mp, self._info)
+        # work around ...
+        df = pd.DataFrame.from_records([eng], index='n')
+        df['val start'] = pd.to_datetime(df['val start'], format='%Y-%m-%d')
+        eng = df.to_dict('records')[0]
 
-        # use Myplant Data to update fake variables
-        # self.Name = self._d['IB Project Name']
-        # self._eng['Validation Engine'] = self.Name
-        #     self._d['IB Unit Commissioning Date'], format='%Y-%m-%d')
+        super().__init__(mp, eng)
 
-        self._set_oph_parameter()
+        # use Myplant Data to update some fake variables
+        self.Name = self._d['IB Project Name']
+        self._eng['Validation Engine'] = self.Name

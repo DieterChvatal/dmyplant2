@@ -23,7 +23,7 @@ install miniconda distribution https://conda.io/projects/conda/en/latest/index.h
 ::
   git clone https://github.com/DieterChvatal/dmyplant.git
 
-*cd into the folder and run*
+*in a Anaconda command window, cd into the dmyplant2 folder and run*
 ::
   python setup.py develop
 
