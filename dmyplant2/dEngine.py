@@ -359,8 +359,8 @@ class Engine:
                 tt = r"&limit=" + str(p_limit)
             else:
                 if p_from and p_to:
-                    tt = r'&from=' + str(arrow.get(p_from).timestamp * 1000) + \
-                        r'&to=' + str(arrow.get(p_to).timestamp * 1000)
+                    tt = r'&from=' + str(arrow.get(p_from).timestamp() * 1000) + \
+                        r'&to=' + str(arrow.get(p_to).timestamp() * 1000)
                 else:
                     raise Exception(
                         r"batch_hist_dataItems, invalid Parameters")
