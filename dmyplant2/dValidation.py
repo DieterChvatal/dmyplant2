@@ -207,10 +207,16 @@ class Validation:
         """
         Return the Engines containing Name Validation
         """
-        return [e for e in self._engines if name in e.Name]
+        try: 
+            return [e for e in self._engines if name in e.Name]
+        except:
+            raise ValueError(f'Engine {name} not found in Validation Engines')
 
     def eng_serialNumber(self, serialNumber):
         """
         Return the Engines containing Name Validation
         """
-        return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
+        try:
+            return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
+        except:
+            raise ValueError(f'Engine SN {serialNumber} not found in Validation Engines')
