@@ -23,7 +23,7 @@ install miniconda distribution https://conda.io/projects/conda/en/latest/index.h
 ::
   git clone https://github.com/DieterChvatal/dmyplant.git
 
-*cd into the folder and run*
+*in a Anaconda command window, cd into the dmyplant2 folder and run*
 ::
   python setup.py develop
 
@@ -79,7 +79,7 @@ create a python file **main.py** in your working directory:
           logging.info('dMyplant demo app started')
 
           # load input data from files
-          dval = dmyplant2.Validation.load_def_csv("input2.csv")
+          dval = dmyplant2.Validation.load_def_csv("input.csv")
 
           # ask & store credentials
           dmyplant2.cred()
@@ -119,7 +119,7 @@ login and credentials in the command window:
   Password: xxxxxxxx
 
 
-basic help is available in the pythone REPL:
+basic help is available in the python REPL:
 ::
   import dmyplant2
   help(dmyplant2)

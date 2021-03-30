@@ -198,6 +198,10 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
+def bokeh_chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwargs):
+    pass
+
+
 def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
 
@@ -205,11 +209,11 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     .....
 
     dat = {
-        161: 'CountOph',
-        102: 'PowerAct',
-        107: 'Various_Values_SpeedAct',
-        217: 'Hyd_PressCrankCase',
-        16546: 'Hyd_PressOilDif'
+        161: ['CountOph','h'],
+        102: ['PowerAct','kW'],
+        107: ['Various_Values_SpeedAct','U/min'],
+        217: ['Hyd_PressCrankCase','mbar'],
+        16546: ['Hyd_PressOilDif','bar']
     }
 
     df = mp.hist_data(

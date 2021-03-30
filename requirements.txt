@@ -1,6 +1,7 @@
 # These requirements are for running tests, the library itself only needs a
 # subset, see setup.py for that list
 
+arrow==1.0.3
 coverage==5.0.3
 matplotlib==3.2.2
 numpy==1.18.5
