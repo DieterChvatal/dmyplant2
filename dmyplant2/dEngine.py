@@ -176,7 +176,7 @@ class Engine:
 
         # add calculated items
         dd = calc_values(dd)
-        self._valstart_ts = epoch_ts(dd['val start'].timestamp())
+        self._valstart_ts = epoch_ts(arrow.get(dd['val start']).timestamp())
         self._lastDataFlowDate = epoch_ts(dd['status'].get(
             'lastDataFlowDate', None))
         return dd
@@ -194,7 +194,7 @@ class Engine:
             self._info['last_fetch_date'] = self._last_fetch_date
             self._info['Validation Engine'] = self._d['IB Project Name']
             self._info['val start'] = arrow.get(
-                self._info['val start']).format('YYYY-MM-DD')
+                self._eng['val start']).format('YYYY-MM-DD')
             with open(self._infofile, 'w') as f:
                 json.dump(self._info, f)
         except FileNotFoundError:
@@ -337,8 +337,11 @@ class Engine:
             df.to_hdf(fn, "data", complevel=6)
 
             return df
-        except ValueError(" Engine hist_data Error - check itemids format"):
-            pass
+        except:
+            raise ValueError("Engine hist_data Error - check itemIds format")
+
+    def scan_for_highres_DataFrames(self):
+        pass
 
     def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
                               assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
@@ -359,8 +362,8 @@ class Engine:
                 tt = r"&limit=" + str(p_limit)
             else:
                 if p_from and p_to:
-                    tt = r'&from=' + str(arrow.get(p_from).timestamp * 1000) + \
-                        r'&to=' + str(arrow.get(p_to).timestamp * 1000)
+                    tt = r'&from=' + str(int(arrow.get(p_from).timestamp()) * 1000) + \
+                         r'&to=' + str(int(arrow.get(p_to).timestamp()) * 1000)
                 else:
                     raise Exception(
                         r"batch_hist_dataItems, invalid Parameters")
@@ -736,11 +739,6 @@ class Engine_SN(Engine):
                 'val start': '2000-01-01',
                 'oph@start': 0
             }
-
-        # work around ...
-        df = pd.DataFrame.from_records([eng], index='n')
-        df['val start'] = pd.to_datetime(df['val start'], format='%Y-%m-%d')
-        eng = df.to_dict('records')[0]
 
         super().__init__(mp, eng)
 
