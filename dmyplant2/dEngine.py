@@ -642,7 +642,7 @@ class Engine:
         as Int
         """
         return int(self._eng['oph@start'])
-        # return self._valstart_ts
+        # return self._valstart_ts value
 
     @ property
     def valstart_ts(self):
