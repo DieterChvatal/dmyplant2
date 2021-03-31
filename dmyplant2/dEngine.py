@@ -10,6 +10,8 @@ import pickle
 import logging
 import json
 import arrow
+import warnings
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 
 class Engine:
@@ -700,8 +702,7 @@ class Engine:
             'RMD_ListBuffMAvgOilConsume_OilConsumption')
         return _dash
 
-        
-        def Validation_period_LOC(self):
+    def Validation_period_LOC(self):
         """Oilconsumption vs. Validation period
 
         Raises:
@@ -709,43 +710,47 @@ class Engine:
             Exception: [description]
 
         Returns:
-            pd.DataFrame:  
-            
+            pd.DataFrame:
+
             columns
-            227: ['OilConsumption', 'g/kWh'], 
+            227: ['OilConsumption', 'g/kWh'],
             237: ['DeltaOpH', 'h'],
-            228: ['OilVolume', 'ml'], 
-            225: ['ActiveEnergy', 'MWh?'], 
+            228: ['OilVolume', 'ml'],
+            225: ['ActiveEnergy', 'MWh?'],
             226: ['AvgPower', 'kW']
-        """        
+        """
         # Lube Oil Consuption data
         locdef = {
-            227: ['OilConsumption', 'g/kWh'], 
+            227: ['OilConsumption', 'g/kWh'],
             237: ['DeltaOpH', 'h'],
-            228: ['OilVolume', 'ml'], 
-            225: ['ActiveEnergy', 'MWh?'], 
+            228: ['OilVolume', 'ml'],
+            225: ['ActiveEnergy', 'MWh?'],
             226: ['AvgPower', 'kW']
-            }
-
+        }
 
         now = arrow.now()
         deltaTS_valperiod = now.timestamp() - arrow.get(self.val_start).timestamp()
 
         limit = 100
         delta = 1.0
-        
+
         while delta > 0:
             try:
-                # call myplant and fetch "p_limit" measurement values 
-                dloc = self._batch_hist_dataItems(itemIds=locdef, p_limit=limit)
+                # call myplant and fetch "p_limit" measurement values
+                dloc = self._batch_hist_dataItems(
+                    itemIds=locdef, p_limit=limit)
                 # calculate number of datapoints in validation period
-                deltaTS_per_limit = now.timestamp() - arrow.get(dloc.datetime.iloc[-1]).timestamp()
-                limit = int(1.5 *(deltaTS_valperiod / deltaTS_per_limit * limit))
+                deltaTS_per_limit = now.timestamp(
+                ) - arrow.get(dloc.datetime.iloc[-1]).timestamp()
+                limit = int(1.5 * (deltaTS_valperiod /
+                                   deltaTS_per_limit * limit))
                 # now download again .. and check criteria
-                dloc = self._batch_hist_dataItems(itemIds=locdef, p_limit=limit)
-                delta = arrow.get(dloc.datetime.iloc[-1]).timestamp() - arrow.get(self.val_start).timestamp()
-                #print(deltaTS_valperiod, deltaTS_per_limit, limit, delta)
-                #print(f"fetch of {int(limit)} latest LOC values goes back to {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}")
+                dloc = self._batch_hist_dataItems(
+                    itemIds=locdef, p_limit=limit)
+                delta = arrow.get(
+                    dloc.datetime.iloc[-1]).timestamp() - arrow.get(self.val_start).timestamp()
+                # print(deltaTS_valperiod, deltaTS_per_limit, limit, delta)
+                # print(f"fetch of {int(limit)} latest LOC values goes back to {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}")
             except:
                 raise Exception("Loop Error in Validation_period_LOC")
 
@@ -757,12 +762,13 @@ class Engine:
 
         # Filter outliers by < 3 * stdev - remove refilling, engine work etc..
         dloc = dloc[np.abs(dloc.OilConsumption-dloc.OilConsumption.mean())
-                <= (3*dloc.OilConsumption.std())]
+                    <= (3*dloc.OilConsumption.std())]
 
         # Calculate Rolling Mean values for Power and LOC
         dloc['LOC'] = dloc.OilConsumption.rolling(10).mean()
         dloc['Pow'] = dloc.AvgPower.rolling(10).mean()
         return dloc
+
 
 class Engine_SN(Engine):
     """
