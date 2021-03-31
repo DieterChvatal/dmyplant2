@@ -28,12 +28,12 @@ SETUP_ARGS = dict(
     ],
     py_modules=['dmyplant', ],
     install_requires=[
-        'arrow>=1.0.3',
-        'requests>=2.22',
-        'matplotlib>=3.2.2',
-        'numpy>=1.18.5',
-        'pandas>=1.0.5',
-        'scipy>=1.5.2'
+        'arrow==1.0.3',
+        'requests==2.22',
+        'matplotlib==3.2.2',
+        'numpy==1.18.5',
+        'pandas==1.0.5',
+        'scipy==1.5.2'
     ],
 )
 

@@ -233,15 +233,15 @@ class MyPlant:
 
         # calculate how many full rows per request within the myplant limit are possible
         rows_per_request = maxdatapoints // len(itemIds)
-        rows_total = (p_to.timestamp - p_from.timestamp) // timeCycle
+        rows_total = int(p_to.timestamp() - p_from.timestamp()) // timeCycle
         pbar = tqdm(total=rows_total)
 
         # initialize loop
-        lp_from = p_from.timestamp * 1000  # Start at lp_from
+        lp_from = int(p_from.timestamp()) * 1000  # Start at lp_from
         lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
-                    p_to.timestamp * 1000)
+                    int(p_to.timestamp()) * 1000)
 
-        while lp_from < p_to.timestamp * 1000:
+        while lp_from < int(p_to.timestamp()) * 1000:
             # for now assume same itemID's are always included ... need to be included in a check
             ldf = self._history_batchdata(
                 id, itemIds, lp_from, lp_to, timeCycle)
@@ -251,9 +251,22 @@ class MyPlant:
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
             lp_to = min((lp_to + rows_per_request *
-                         timeCycle * 1000), p_to.timestamp * 1000)
+                         timeCycle * 1000), int(p_to.timestamp()) * 1000)
         pbar.close()
         # Addtional Datetime column calculated from timestamp
         df['datetime'] = pd.to_datetime(df['time'] * 1000000)
-
         return df
+
+    def stitch_df(self, **dataframes):
+        """Stitch Dataframes together
+        1.) Check if dataframes share the same ItemId's
+        2.) Remove overlapping areas, keep the higher frequent part
+        3.) return stitched Dataframe 
+
+        Args:
+            **dataframes
+
+        Returns:
+            pd.DataFrame: Stitched Dataframe
+        """        
+        return pd.DataFrame([])
