@@ -342,8 +342,26 @@ class Engine:
         except:
             raise ValueError("Engine hist_data Error - check itemIds format")
 
-    def scan_for_highres_DataFrames(self):
-        pass
+    def scan_for_highres_DataFrames(self, dat):
+        df = pd.DataFrame([])
+        alarms = self.batch_hist_alarms(
+            p_from=arrow.get(self.val_start).to('Europe/Vienna'),
+            p_to=arrow.get(self.val_start).to('Europe/Vienna').shift(months=3)
+        )
+        alarms = alarms[(alarms['name'] == '1232') |
+                        (alarms['name'] == '1231')]
+        for i, row in enumerate(alarms[['name', 'message', 'datetime']][::-1].values):
+            print(row)
+            df = df.append(
+                self.hist_data(
+                    dat,
+                    p_from=arrow.get(
+                        row[2], 'MM-DD-YYYY HH:mm').shift(minutes=-10),
+                    p_to=arrow.get(
+                        row[2], 'MM-DD-YYYY HH:mm').shift(minutes=10),
+                    timeCycle=1,
+                    slot=i+1))
+        return df
 
     def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=3600,
                               assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
@@ -365,7 +383,7 @@ class Engine:
             else:
                 if p_from and p_to:
                     tt = r'&from=' + str(int(arrow.get(p_from).timestamp()) * 1000) + \
-                         r'&to=' + str(int(arrow.get(p_to).timestamp()) * 1000)
+                        r'&to=' + str(int(arrow.get(p_to).timestamp()) * 1000)
                 else:
                     raise Exception(
                         r"batch_hist_dataItems, invalid Parameters")
@@ -403,7 +421,6 @@ class Engine:
             return df
         except:
             raise
-
 
     def Validation_period_LOC(self):
         """Oilconsumption vs. Validation period
@@ -453,7 +470,8 @@ class Engine:
                 delta = arrow.get(
                     dloc.datetime.iloc[-1]).timestamp() - arrow.get(self.val_start).timestamp()
                 print(deltaTS_valperiod, deltaTS_per_limit, limit, delta)
-                print(f"fetch of {int(limit)} latest LOC values goes back to {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}, Val Start was {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+                print(
+                    f"fetch of {int(limit)} latest LOC values goes back to {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}, Val Start was {arrow.get(self.val_start).format('DD.MM.YYYY')}")
             except:
                 raise Exception("Loop Error in Validation_period_LOC")
 
@@ -471,7 +489,6 @@ class Engine:
         dloc['LOC'] = dloc.OilConsumption.rolling(10).mean()
         dloc['Pow'] = dloc.AvgPower.rolling(10).mean()
         return dloc
-
 
     def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
