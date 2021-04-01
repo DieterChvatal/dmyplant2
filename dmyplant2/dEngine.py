@@ -58,7 +58,7 @@ class Engine:
                     self._last_fetch_date = self._info['last_fetch_date']
                 self._info = {**self._info, **self._eng}
                 self._info['val start'] = arrow.get(
-                    self._eng['val start']).timestamp
+                    self._eng['val start']).timestamp()
         except:
             self._info = {**self._info, **self._eng}
         try:
@@ -492,8 +492,8 @@ class Engine:
                     r"&limit=" + str(p_limit)
             else:
                 if p_from and p_to:
-                    tt = r'&from=' + str(arrow.get(p_from).timestamp * 1000) + \
-                        r'&to=' + str(arrow.get(p_to).timestamp * 1000)
+                    tt = r'&from=' + str(int(arrow.get(p_from).timestamp()) * 1000) + \
+                        r'&to=' + str(int(arrow.get(p_to).timestamp()) * 1000)
                 else:
                     raise Exception(
                         r"batch_hist_alarms, invalid Parameters")
