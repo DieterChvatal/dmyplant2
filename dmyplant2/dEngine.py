@@ -404,6 +404,75 @@ class Engine:
         except:
             raise
 
+
+    def Validation_period_LOC(self):
+        """Oilconsumption vs. Validation period
+
+        Raises:
+            Exception: [description]
+            Exception: [description]
+
+        Returns:
+            pd.DataFrame:
+
+            columns
+            227: ['OilConsumption', 'g/kWh'],
+            237: ['DeltaOpH', 'h'],
+            228: ['OilVolume', 'ml'],
+            225: ['ActiveEnergy', 'MWh?'],
+            226: ['AvgPower', 'kW']
+        """
+        # Lube Oil Consuption data
+        locdef = {
+            227: ['OilConsumption', 'g/kWh'],
+            237: ['DeltaOpH', 'h'],
+            228: ['OilVolume', 'ml'],
+            225: ['ActiveEnergy', 'MWh?'],
+            226: ['AvgPower', 'kW']
+        }
+
+        now = arrow.now()
+        deltaTS_valperiod = now.timestamp() - arrow.get(self.val_start).timestamp()
+
+        limit = 100
+        delta = 1.0
+
+        while delta > 0:
+            try:
+                # call myplant and fetch "p_limit" measurement values
+                dloc = self._batch_hist_dataItems(
+                    itemIds=locdef, p_limit=limit, timeCycle=1)
+                # calculate number of datapoints in validation period
+                deltaTS_per_limit = now.timestamp(
+                ) - arrow.get(dloc.datetime.iloc[-1]).timestamp()
+                limit = int(1.5 * (deltaTS_valperiod /
+                                   deltaTS_per_limit * limit))
+                # now download again .. and check criteria
+                dloc = self._batch_hist_dataItems(
+                    itemIds=locdef, p_limit=limit, timeCycle=1)
+                delta = arrow.get(
+                    dloc.datetime.iloc[-1]).timestamp() - arrow.get(self.val_start).timestamp()
+                print(deltaTS_valperiod, deltaTS_per_limit, limit, delta)
+                print(f"fetch of {int(limit)} latest LOC values goes back to {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}, Val Start was {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+            except:
+                raise Exception("Loop Error in Validation_period_LOC")
+
+        if dloc.datetime.iloc[-1] > pd.to_datetime(self.val_start):
+            raise Exception("limit iteration failed")
+
+        # skip values before validation start
+        dloc = dloc[dloc.datetime > pd.to_datetime(self.val_start)]
+
+        # Filter outliers by < 3 * stdev - remove refilling, engine work etc..
+        dloc = dloc[np.abs(dloc.OilConsumption-dloc.OilConsumption.mean())
+                    <= (3*dloc.OilConsumption.std())]
+
+        # Calculate Rolling Mean values for Power and LOC
+        dloc['LOC'] = dloc.OilConsumption.rolling(10).mean()
+        dloc['Pow'] = dloc.AvgPower.rolling(10).mean()
+        return dloc
+
+
     def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
         Get pandas dataFrame of Events history, either limit or From & to are required
@@ -701,73 +770,6 @@ class Engine:
         _dash['LOC'] = self.get_dataItem(
             'RMD_ListBuffMAvgOilConsume_OilConsumption')
         return _dash
-
-    def Validation_period_LOC(self):
-        """Oilconsumption vs. Validation period
-
-        Raises:
-            Exception: [description]
-            Exception: [description]
-
-        Returns:
-            pd.DataFrame:
-
-            columns
-            227: ['OilConsumption', 'g/kWh'],
-            237: ['DeltaOpH', 'h'],
-            228: ['OilVolume', 'ml'],
-            225: ['ActiveEnergy', 'MWh?'],
-            226: ['AvgPower', 'kW']
-        """
-        # Lube Oil Consuption data
-        locdef = {
-            227: ['OilConsumption', 'g/kWh'],
-            237: ['DeltaOpH', 'h'],
-            228: ['OilVolume', 'ml'],
-            225: ['ActiveEnergy', 'MWh?'],
-            226: ['AvgPower', 'kW']
-        }
-
-        now = arrow.now()
-        deltaTS_valperiod = now.timestamp() - arrow.get(self.val_start).timestamp()
-
-        limit = 100
-        delta = 1.0
-
-        while delta > 0:
-            try:
-                # call myplant and fetch "p_limit" measurement values
-                dloc = self._batch_hist_dataItems(
-                    itemIds=locdef, p_limit=limit)
-                # calculate number of datapoints in validation period
-                deltaTS_per_limit = now.timestamp(
-                ) - arrow.get(dloc.datetime.iloc[-1]).timestamp()
-                limit = int(1.5 * (deltaTS_valperiod /
-                                   deltaTS_per_limit * limit))
-                # now download again .. and check criteria
-                dloc = self._batch_hist_dataItems(
-                    itemIds=locdef, p_limit=limit)
-                delta = arrow.get(
-                    dloc.datetime.iloc[-1]).timestamp() - arrow.get(self.val_start).timestamp()
-                # print(deltaTS_valperiod, deltaTS_per_limit, limit, delta)
-                # print(f"fetch of {int(limit)} latest LOC values goes back to {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}")
-            except:
-                raise Exception("Loop Error in Validation_period_LOC")
-
-        if dloc.datetime.iloc[-1] > pd.to_datetime(self.val_start):
-            raise Exception("limit iteration failed")
-
-        # skip values before validation start
-        dloc = dloc[dloc.datetime > pd.to_datetime(self.val_start)]
-
-        # Filter outliers by < 3 * stdev - remove refilling, engine work etc..
-        dloc = dloc[np.abs(dloc.OilConsumption-dloc.OilConsumption.mean())
-                    <= (3*dloc.OilConsumption.std())]
-
-        # Calculate Rolling Mean values for Power and LOC
-        dloc['LOC'] = dloc.OilConsumption.rolling(10).mean()
-        dloc['Pow'] = dloc.AvgPower.rolling(10).mean()
-        return dloc
 
 
 class Engine_SN(Engine):
