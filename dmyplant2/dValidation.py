@@ -14,7 +14,7 @@ class Validation:
     _val = None
     _engines = []
 
-    def __init__(self, mp, dval, eval_date=None, cui_log=False):
+    def __init__(self, mp, dval, lengine=Engine, eval_date=None, cui_log=False):
         """ Myplant Validation object
             collects and provides the engines list.
             compiles a dashboard as pandas DataFrame
@@ -31,7 +31,7 @@ class Validation:
         # create and initialise all Engine Instances
         self._engines = []
         for eng in engines:
-            e = Engine(mp, eng)
+            e = lengine(mp, eng)
             self._engines.append(e)
             log = f"{eng['n']:02d} {e}"
             logging.info(log)
@@ -207,7 +207,7 @@ class Validation:
         """
         Return the Engines containing Name Validation
         """
-        try: 
+        try:
             return [e for e in self._engines if name in e.Name]
         except:
             raise ValueError(f'Engine {name} not found in Validation Engines')
@@ -219,4 +219,5 @@ class Validation:
         try:
             return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
         except:
-            raise ValueError(f'Engine SN {serialNumber} not found in Validation Engines')
+            raise ValueError(
+                f'Engine SN {serialNumber} not found in Validation Engines')
