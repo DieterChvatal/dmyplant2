@@ -441,33 +441,22 @@ class Engine:
         }
 
         def calc_delta(adate, bdate):
-            return  adate.timestamp() - bdate.timestamp()
+            return adate.timestamp() - bdate.timestamp()
 
-        limit = 1500
-        delta = 1.0
+        limit = 3000
 
-        dloc = self._batch_hist_dataItems(itemIds=locdef, p_limit=limit, timeCycle=1)
-        delta = calc_delta(arrow.get(dloc.datetime.iloc[-1]), arrow.get(self.val_start))
-
-        while delta > 0:
-            try:
-                #deltaTS_per_limit = calc_delta(arrow.now(),arrow.get(dloc.datetime.iloc[-1]))
-                limit = (1 + calc_delta(arrow.get(dloc.datetime.iloc[-1]), arrow.get(self.val_start)) / 
-                         calc_delta(arrow.now(),dloc.datetime.iloc[-1])) * limit
-                limit = max(limit, 50)
-                # now download again .. and check criteria
-                dloc = self._batch_hist_dataItems(
-                    itemIds=locdef, p_limit=int(limit), timeCycle=1)
-                delta = calc_delta(arrow.get(dloc.datetime.iloc[-1]), arrow.get(self.val_start))
-                print(f"LOC loop required, limit={int(limit)}, delta={delta},\nis {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} < {arrow.get(self.val_start).format('DD.MM.YYYY')}?")
-            except:
-                raise Exception("Loop Error in Validation_period_LOC")
-        else:
-            print(f"LOC no loop required, limit={int(limit)}, delta={delta},\nis {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} < {arrow.get(self.val_start).format('DD.MM.YYYY')}?")
-
-
-        if dloc.datetime.iloc[-1] > pd.to_datetime(self.val_start):
-            raise Exception("limit iteration failed")
+        try:
+            dloc = self._batch_hist_dataItems(
+                itemIds=locdef, p_limit=limit, timeCycle=1)
+            cnt = dloc['OilConsumption'].count()
+            if (cnt != limit):
+                print(
+                    f"all available data received,\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+            else:
+                print(
+                    f"limit={int(limit)},\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+        except:
+            raise Exception("Loop Error in Validation_period_LOC")
 
         # skip values before validation start
         dloc = dloc[dloc.datetime > pd.to_datetime(self.val_start)]
