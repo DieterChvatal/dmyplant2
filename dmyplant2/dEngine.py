@@ -428,20 +428,20 @@ class Engine:
             227: ['OilConsumption', 'g/kWh'],
             237: ['DeltaOpH', 'h'],
             228: ['OilVolume', 'ml'],
-            225: ['ActiveEnergy', 'MWh?'],
+            225: ['ActiveEnergy', 'MWh'],
             226: ['AvgPower', 'kW']
         """
         # Lube Oil Consuption data
         locdef = {
             227: ['OilConsumption', 'g/kWh'],
-            237: ['DeltaOpH', 'h'],
-            228: ['OilVolume', 'ml'],
-            225: ['ActiveEnergy', 'MWh?'],
+            # 237: ['DeltaOpH', 'h'],
+            # 228: ['OilVolume', 'ml'],
+            # 225: ['ActiveEnergy', 'MWh'],
             226: ['AvgPower', 'kW']
         }
 
-        def calc_delta(adate, bdate):
-            return adate.timestamp() - bdate.timestamp()
+        # def calc_delta(adate, bdate):
+        #    return adate.timestamp() - bdate.timestamp()
 
         limit = 3000
 
