@@ -134,8 +134,8 @@ class Engine:
 
         doctest:
         >>> e = dmyplant2.Engine(mp, eng)
-        >>> np.trunc(e.oph(arrow.get("2021-03-01 00:00").timestamp()))
-        6163.0
+        >>> 6160.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 6170.0
+        True
         """
         y = self._k * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
@@ -152,8 +152,8 @@ class Engine:
 
         doctest:
         >>> e = dmyplant2.Engine(mp, eng)
-        >>> np.trunc(e.oph2(arrow.get("2021-03-01 00:00").timestamp()))
-        6163.0
+        >>> 6160.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 6170.0
+        True
         """
         y = self._k2 * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
@@ -243,6 +243,13 @@ class Engine:
         Get properties Item Value by Item Name
 
         e.g.: vers = e.get_property("Engine Version")
+
+        doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e.get_property('Engine ID')
+        'M4'
+        >>> e.get_property('nothing') == None
+        True
         """
         return self.get_data('properties', item)
 
@@ -251,6 +258,13 @@ class Engine:
         Get  dataItems Item Value by Item Name
 
         e.g.: vers = e.get_dataItem("Monic_VoltCyl01")
+
+        doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e.get_dataItem('Power_PowerNominal')
+        4500.0
+        >>> e.get_dataItem('nothing') == None
+        True
         """
         return self.get_data('dataItems', item)
 
@@ -259,11 +273,17 @@ class Engine:
         Get historical dataItem
         dataItemId  int64   Id of the DataItem to query.
         timestamp   int64   Optional,  timestamp in the DataItem history to query for.
+
+        doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e.historical_dataItem(161, arrow.get("2021-03-01 00:00").timestamp())
+        12575.0
         """
         try:
             res = self._mp.historical_dataItem(
                 self.id, itemId, mp_ts(timestamp)).get('value', None)
-        except:
+        except Exception as e:
+            print(e)
             res = None
         return res
 
