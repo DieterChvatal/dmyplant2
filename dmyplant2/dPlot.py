@@ -9,6 +9,7 @@ from pprint import pprint as pp
 import statistics
 import sys
 import time
+import traceback
 
 # Third party imports
 import matplotlib
@@ -16,9 +17,17 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.dates as dates
 
+#Bokeh imports
+from bokeh.io import push_notebook, show, output_notebook
+from bokeh.plotting import figure, output_file, show
+from bokeh.models import LinearAxis, Range1d, HoverTool
+from bokeh.core.validation import check_integrity
+from bokeh.layouts import column, row, gridplot
+from bokeh.models import ColumnDataSource
+
 # Load Application imports
 from dmyplant2.dReliability import demonstrated_reliability_sr
-
+import dmyplant2
 
 def _idx(n, s, e, x):
     return int(n * (x - s) / (e - s)+1)
@@ -198,10 +207,6 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
-def bokeh_chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwargs):
-    pass
-
-
 def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
 
@@ -336,6 +341,169 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     if legend:
         axes[0].legend(lns, labs, loc=0)
 
+def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, *args, **kwargs):
+    """Generate interactive Diane like chart with multiple axes
+
+    Args:
+        source (bokeh.ColumnDataSource): Data , e.g downloaded by engine.batch_hist_dataItems(...)
+        pltcfg ([list of dicts]): the source columns to plot, and range of y-axis
+        x_ax (str, optional): x-axis column as string. Defaults to 'datetime'.
+        title (str, optional): Main Title of figure. Defaults to None.
+        grid (bool, optional): display grid. Defaults to True.
+        legend (bool, optional): legend. Defaults to True.  
+        style (str, optional): style of markers, options i.e. 'line', 'circle'
+            circle necessary to enable linked brushing (selection of datapoints)
+        x_range (bokeh.figure.x_range, optional): x_range of different bokeh-plot; used to connect x-axis limits
+        y_range (bokeh.figure.y_range, optional): y_range of different bokeh-plot; used to connect y-axis limits
+
+
+    Returns:
+        bokeh.plotting.figure: Bokeh plot ready to plot or embed in a layout
+
+    example:
+    .....
+    from bokeh.io import push_notebook, show, output_notebook
+    from bokeh.plotting import figure, output_file, show
+    from bokeh.models import LinearAxis, Range1d, HoverTool
+    from bokeh.layouts import column, row, gridplot
+    from bokeh.models import ColumnDataSource
+    from itertools import cycle
+    import dmyplant2
+    import arrow
+
+    import pandas as pd
+    import numpy as np
+    import traceback
+    import matplotlib
+    import sys
+    import warnings
+    
+
+    dmyplant2.cred()
+    mp = dmyplant2.MyPlant(0)
+
+    # Version mittels Validation Instance 
+    dval = dmyplant2.Validation.load_def_csv('input.csv')
+    vl = dmyplant2.Validation(mp, dval, cui_log=True)
+    e = vl.eng_serialNumber(1145166)
+
+    print(f"{e} {e.id}")
+    dat = {
+        161: ['CountOph','h'],
+        102: ['PowerAct','kW'],
+        107: ['Various_Values_SpeedAct','U/min'],
+        217: ['Hyd_PressCrankCase','mbar'],
+        16546: ['Hyd_PressOilDif','bar']
+    }
+
+    df = mp.hist_data(
+        e.id,
+        itemIds=dat,
+        p_from=arrow.get('2021-03-05 05:28').to('Europe/Vienna'),
+        p_to=arrow.get('2021-03-05 05:30').to('Europe/Vienna'),
+        timeCycle=1)
+
+
+    pltcfg = [
+        {'col': ['PowerAct', 'Various_Values_SpeedAct'], 'unit':'1/min'},  # , 'ylim':(0, 5000) 
+        {'col': ['Various_Values_SpeedAct'], 'ylim':(0, 1800), 'unit':'1/min'},
+        {'col': ['Hyd_PressCrankCase'], 'ylim': [-50, 20], 'unit':'mbar'},
+        {'col': ['Hyd_PressOilDif'], 'ylim':(0, 1), 'unit':'bar'}
+    ]
+
+    output_notebook()
+
+    df.loc['2021-03-05 05:00':'2021-03-05 06:00']
+
+    title=e._info.get('Validation Engine')
+
+    source = ColumnDataSource(df)
+    output_file(title+'.html')
+    p=bokeh_chart(source, pltcfg, title=title)
+
+    show(p)
+    """
+
+    TOOLS = 'pan, box_zoom, wheel_zoom, box_select, reset, save' #select Tools to display
+    colors = cycle(matplotlib.rcParams['axes.prop_cycle']) #colors to use for plot
+    linewidth = 2
+
+    if (x_ax == 'datetime'): #seperate constructors for object for datetime or no datetime x-axis
+        p = figure(
+        plot_width=800,
+        plot_height=600,
+        x_axis_label='datetime',
+        x_axis_type='datetime',
+        x_range=x_range,
+        y_range=y_range,
+        tools=TOOLS
+        )
+    else:
+        p = figure(
+            plot_width=800,
+            plot_height=600,
+            x_axis_label=x_ax,
+            tools=TOOLS,
+            x_range=x_range,
+            y_range=y_range
+        )
+
+    if grid==True:
+        p.grid.grid_line_color = None
+
+    p.yaxis.visible = False
+    tooltips = []
+    for i, y in enumerate(pltcfg):
+
+        color = next(cycle(colors))['color']
+        if y.get('ylim'):
+            ylim = list(y['ylim'])
+            p.extra_y_ranges[str(i)] = Range1d(start=ylim[0], end=ylim[1])
+        else: #if no ylim defined, calculate min, max and set borders
+            max_val=0 
+            min_val=0
+            for entry in y['col']:
+              maxi=np.amax(source.data[entry])
+              mini=np.amin(source.data[entry])
+              if maxi>max_val:
+                 max_val=maxi
+              if mini<min_val:
+                 min_val=mini
+            p.extra_y_ranges[str(i)] = Range1d(min_val*1.15, max_val*1.15)
+            #p.extra_y_ranges[str(i)] = Range1d(
+                #min(0, 1.15 * df[y['col']].min().min()), 1.15 * df[y['col']].max().max()) Implementation with DataFrame
+        for col in y['col']:
+            if 'color' in y:
+                color = y['color']
+            else:
+                color = next(cycle(colors))['color']
+            func = getattr(p, style) #to choose between different plotting styles
+            func(source=source, x=x_ax, y=col, #circle or line
+            color=color, y_range_name=str(i), legend_label=col, line_width=linewidth)
+            tooltips.append((col, '@'+col + '{0.2 f} '+y['unit']))  # or 0.0 a
+
+        
+        
+        llabel = ', '.join(y['col'])+' ['+y['unit']+']'
+        
+        if len(llabel) > 90:
+                llabel = llabel[:86] + ' ...'
+        if len(y['col']) > 1:
+            color = 'black'
+        p.add_layout(LinearAxis(y_range_name=str(i),
+                            axis_label=llabel, axis_label_text_color=color), 'left')
+
+    p.add_tools(HoverTool(tooltips=tooltips,
+                           mode='mouse'))  # mode=vline -> display a tooltip whenever the cursor is vertically in line                                              with a glyph
+    p.toolbar.active_scroll = p.select_one('WheelZoomTool')
+
+    p.legend.click_policy='hide' #hides graph when you click on legend, other option mute (makes them less visible)
+    p.legend.location = 'top_left'
+
+    p.title.text = title
+    p.title.text_font_size = '20px' 
+
+    return p
 
 if __name__ == '__main__':
     pass
