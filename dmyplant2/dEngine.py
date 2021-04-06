@@ -32,7 +32,12 @@ class Engine:
 
         Args:
             mp (dmyplant2.Myplant): Myplant class instance
-            eng (pd.dataFrame): Validation engine input data
+            eng (dict): Validation engine input data
+
+        Doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e.serialNumber
+        '1320072'
         """
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
@@ -43,14 +48,7 @@ class Engine:
         # self._lastcontact = fname + '_lastcontact.pkl'
         self._infofile = fname + '.json'
 
-        # lastcontact
-        # try:
-        #     with open(self._lastcontact, 'rb') as handle:
-        #         self._last_fetch_date = pickle.load(handle)
-        # except:
-        #     pass
-
-        # load info json & lstfetchdate
+        # load info json & lastfetchdate
         try:
             with open(self._infofile) as f:
                 self._info = json.load(f)
@@ -123,7 +121,7 @@ class Engine:
         # request time to calculate the inperpolation
         # for low validation oph this gives more consistent results
         self._k2 = float(self.oph_parts /
-                         (self.now_ts - self._valstart_ts))
+                         (arrow.now().timestamp() - self._valstart_ts))
 
     def oph(self, ts):
         """Interpolated Operating hours
@@ -133,6 +131,11 @@ class Engine:
 
         Returns:
             float: Operating time rel. to Validation start
+
+        doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> np.trunc(e.oph(arrow.get("2021-03-01 00:00").timestamp()))
+        6163.0
         """
         y = self._k * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
@@ -146,6 +149,11 @@ class Engine:
 
         Returns:
             float: Operating time rel. to Validation start
+
+        doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> np.trunc(e.oph2(arrow.get("2021-03-01 00:00").timestamp()))
+        6163.0
         """
         y = self._k2 * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
@@ -211,7 +219,22 @@ class Engine:
         'properties' data Item is in 'properties' list
         'dataItems' data Item is in 'dataItems' list
 
-        e.g.: oph = e.get_data('dataItms','Count_OpHour')
+        e.g.: oph = e.get_data('dataItems','Count_OpHour')
+        
+        doctest:
+        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e.get_data('nokey','id')
+        117617
+        >>> e.get_data('nokey','nothing') == None
+        True
+        >>> e.get_data('dataItems','Power_PowerNominal')
+        4500.0
+        >>> e.get_data('dataItems','nothing') == None
+        True
+        >>> e.get_data('properties','Engine ID')
+        'M4'
+        >>> e.get_data('properties','nothing') == None
+        True
         """
         return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
 
@@ -307,7 +330,7 @@ class Engine:
                             # list(ldf['time'][-2:-1])[0] + timeCycle)
                             # new starting point ...
                             print(
-                                f"\nitemIds: {set(itemIds)},\n{ldf.shape}\nfrom: {p_from.format('DD.MM.YYYY - HH:mm')}\nto:   {last_p_to.format('DD.MM.YYYY - HH:mm')}\n{fn}\n")
+                                f"\nitemIds: {set(itemIds)}, Shape={ldf.shape}, from: {p_from.format('DD.MM.YYYY - HH:mm')}, to:   {last_p_to.format('DD.MM.YYYY - HH:mm')}, loaded from {fn}")
                 except:
                     pass
             return ldf, last_p_to
@@ -323,6 +346,7 @@ class Engine:
                 ndf = self._mp.hist_data(
                     self.id, itemIds, np_from, p_to, timeCycle)
                 df = df.append(ndf)
+                print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
 
             df.reset_index(drop=True, inplace=True)
 
@@ -451,7 +475,7 @@ class Engine:
             cnt = dloc['OilConsumption'].count()
             if (cnt != limit):
                 print(
-                    f"all available data received,\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+                    f"LOC, all available data received,\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
             else:
                 print(
                     f"limit={int(limit)},\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
@@ -531,6 +555,84 @@ class Engine:
         """
         return self.get_data('nokey', 'serialNumber')
         # return self._d['serialNumber']
+
+    @ property
+    def oph_parts(self):
+        """
+        Oph since Validation Start
+        """
+        return int(self.Count_OpHour - self.oph_start)
+
+    @ property
+    def properties(self):
+        """
+        properties dict
+        e.g.: prop = e.properties
+        """
+        return self.asset['properties']
+
+    @ property
+    def dataItems(self):
+        """
+        dataItems dict
+        e.g.: dataItems = e.dataItems
+        """
+        return self.asset['dataItems']
+
+    @ property
+    def val_start(self):
+        """
+        Individual Validation Start Date
+        as String
+        """
+        return str(self._eng['val start'])
+        # return self._valstart_ts
+
+    @ property
+    def valstart_ts(self):
+        """
+        Individual Validation Start Date
+        as EPOCH timestamp
+        e.g.: vs = e.valstart_ts
+        """
+        return epoch_ts(self._eng['val start'].timestamp())
+
+    @ property
+    def oph_start(self):
+        """
+        oph at Validation Start
+        as Int
+        """
+        return int(self._eng['oph@start'])
+
+    # @ property
+    # def valstart_oph(self):
+    #     """
+    #     Individual Validation Start Date
+    #     as EPOCH timestamp
+    #     e.g.: vs = e.valstart_ts
+    #     """
+    #     return self._d['oph@start']
+
+    # @ property
+    # def now_ts(self):
+    #     """
+    #     Actual Date & Time
+    #     as EPOCH timestamp
+    #     e.g.: now = e.now_ts
+    #     """
+    #     return datetime.now().timestamp()
+
+    @ property
+    def Count_OpHour(self):
+        """
+        get current OP Hours
+        """
+        return int(self.get_dataItem('Count_OpHour'))
+
+    ############################
+    #Calculated & exposed values
+    ############################
 
     @ staticmethod
     def _bore(platform):
@@ -672,82 +774,6 @@ class Engine:
         return np.around(1200.0 * self.Pmech_nominal / (self.engvol * self.Speed_nominal), decimals=1)
 
     @ property
-    def oph_parts(self):
-        """
-        Oph since Validation Start
-        """
-        return int(self.Count_OpHour - self.oph_start)
-
-    @ property
-    def properties(self):
-        """
-        properties dict
-        e.g.: prop = e.properties
-        """
-        return self.asset['properties']
-
-    @ property
-    def dataItems(self):
-        """
-        dataItems dict
-        e.g.: dataItems = e.dataItems
-        """
-        return self.asset['dataItems']
-
-    @ property
-    def val_start(self):
-        """
-        Individual Validation Start Date
-        as String
-        """
-        return str(self._eng['val start'])
-        # return self._valstart_ts
-
-    @ property
-    def oph_start(self):
-        """
-        oph at Validation Start
-        as Int
-        """
-        return int(self._eng['oph@start'])
-        # return self._valstart_ts value
-
-    @ property
-    def valstart_ts(self):
-        """
-        Individual Validation Start Date
-        as EPOCH timestamp
-        e.g.: vs = e.valstart_ts
-        """
-        return epoch_ts(self._eng['val start'].timestamp())
-        # return self._valstart_ts
-
-    @ property
-    def valstart_oph(self):
-        """
-        Individual Validation Start Date
-        as EPOCH timestamp
-        e.g.: vs = e.valstart_ts
-        """
-        return self._d['oph@start']
-
-    @ property
-    def now_ts(self):
-        """
-        Actual Date & Time
-        as EPOCH timestamp
-        e.g.: now = e.now_ts
-        """
-        return datetime.now().timestamp()
-
-    @ property
-    def Count_OpHour(self):
-        """
-        get current OP Hours
-        """
-        return int(self.get_dataItem('Count_OpHour'))
-
-    @ property
     def dash(self):
         _dash = dict()
         _dash['Name'] = self.Name
@@ -773,6 +799,11 @@ class Engine_SN(Engine):
     """
     Engine Object with serialNumber constructor
     inherited from Engine
+
+    doctest:
+    >>> e = dmyplant2.Engine_SN(mp,'1320072') 
+    >>> print(f"{e._sn}")
+    1320072
     """
 
     def __init__(self, mp, sn):
@@ -813,3 +844,33 @@ class Engine_SN(Engine):
         # use Myplant Data to update some fake variables
         self.Name = self._d['IB Project Name']
         self._eng['Validation Engine'] = self.Name
+
+if __name__ == "__main__":
+
+    import dmyplant2
+    import pandas
+    eng = {
+    'n': 16,
+    'Validation Engine': 'BMW LANDSHUT 4.10',
+    'serialNumber': 1320072,
+    'val start': '2020-02-07',
+    'oph@start': 6316,
+    'starts@start': 768.0,
+    'Asset ID': 117617.0,
+    'Old PU first replaced OPH': 1742.0,
+    'Old PUs replaced before upgrade': 4.0
+    }
+
+    dmyplant2.cred()
+    mp = dmyplant2.MyPlant(0)
+    #vl = dmyplant2.Validation(mp, dval, cui_log=False)
+
+    import doctest
+    doctest.testmod()
+
+    # >>> eng = {'n': 16, \
+    # 'Validation Engine': 'BMW LANDSHUT 4.10', \
+    # 'serialNumber': 1320072, \
+    # 'val start': '2020-02-07', \
+    # 'oph@start': 6316, \
+    # 'starts@start': 768.0 }
