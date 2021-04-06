@@ -341,7 +341,16 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     if legend:
         axes[0].legend(lns, labs, loc=0)
 
-def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, *args, **kwargs):
+def dbokeh_chart(source, pltcfg, x='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(10,7), *args, **kwargs):
+    """wrapper function for bokeh_chart from Johannes""" 
+    if notebook: output_notebook()
+    if title: title = str(title)
+    for col in pltcfg: 
+        if not 'unit' in col: col['unit'] = ''
+    fig = bokeh_chart(source, pltcfg, x, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
+    show(fig)
+
+def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=(10,7), *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:
@@ -423,15 +432,19 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
 
     show(p)
     """
-
+    dpi = 80
+    mwidth = figsize[0] * dpi
+    mheight = figsize[1] * dpi
+    source = ColumnDataSource(source)
+    
     TOOLS = 'pan, box_zoom, wheel_zoom, box_select, reset, save' #select Tools to display
     colors = cycle(matplotlib.rcParams['axes.prop_cycle']) #colors to use for plot
     linewidth = 2
 
     if (x_ax == 'datetime'): #seperate constructors for object for datetime or no datetime x-axis
         p = figure(
-        plot_width=800,
-        plot_height=600,
+        plot_width=mwidth,
+        plot_height=mheight,
         x_axis_label='datetime',
         x_axis_type='datetime',
         x_range=x_range,
@@ -440,8 +453,8 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
         )
     else:
         p = figure(
-            plot_width=800,
-            plot_height=600,
+            plot_width=mwidth,
+            plot_height=mheight,
             x_axis_label=x_ax,
             tools=TOOLS,
             x_range=x_range,
@@ -500,7 +513,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
     p.legend.click_policy='hide' #hides graph when you click on legend, other option mute (makes them less visible)
     p.legend.location = 'top_left'
 
-    p.title.text = title
+    p.title.text = str(title)
     p.title.text_font_size = '20px' 
 
     return p
