@@ -8,6 +8,42 @@ from pprint import pprint as pp
 from scipy.stats.distributions import chi2
 
 
+class HandleID():
+    df = None
+    def __init__(self, filename=None, datdict=None):
+        if filename:
+            self._load_csv(filename)
+        elif datdict:
+            self._load_dict(datdict)
+        else:
+            raise ValueError("no Request data defined")        
+
+    def _load_csv(self, filename):
+        self.df = pd.read_csv(filename, sep=';', encoding='utf-8')
+
+    def _load_dict(self, dat):
+        self.df = pd.DataFrame(
+            [[k]+v for k, v in dat.items()], columns=['ID', 'myPlantName', 'unit'])
+
+    def _unit_name(self, name):
+        return list(self.df[self.df['myPlantName'] == name]['unit'])[0]
+
+    def _unit_id(self, id):
+        erg = list(self.df[self.df['ID'] == id]['unit'])[0]
+        return erg
+
+    def datdict(self):
+        return {rec['ID']: [rec['myPlantName'], rec['unit']] for rec in self.df.to_dict('records')}
+
+    def unit(self, id=None, name=None):
+        if id:
+            return self._unit_id(id)
+        elif name:
+            return self._unit_name(name)
+        else:
+            raise ValueError("no valid Parameters")
+
+
 class Validation:
 
     _dash = None
