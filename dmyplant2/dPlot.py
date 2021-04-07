@@ -341,12 +341,13 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
     if legend:
         axes[0].legend(lns, labs, loc=0)
 
-def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, *args, **kwargs):
+def bokeh_chart(source, pltcfg, dataItems=None, x_ax='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:
         source (bokeh.ColumnDataSource): Data , e.g downloaded by engine.batch_hist_dataItems(...)
         pltcfg ([list of dicts]): the source columns to plot, and range of y-axis
+        dataItems (pd.Dataframe, optional): DataItems available from myPlant, imported for faster processing
         x_ax (str, optional): x-axis column as string. Defaults to 'datetime'.
         title (str, optional): Main Title of figure. Defaults to None.
         grid (bool, optional): display grid. Defaults to True.
@@ -424,7 +425,10 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
     show(p)
     """
 
-    TOOLS = 'pan, box_zoom, wheel_zoom, box_select, reset, save' #select Tools to display
+    if dataItems==None:
+        dataItems=pd.read_csv('DataItems_Request.csv', sep=';', encoding='utf-8')
+
+    TOOLS = 'pan, box_zoom, xwheel_zoom, box_select, reset, save' #select Tools to display
     colors = cycle(matplotlib.rcParams['axes.prop_cycle']) #colors to use for plot
     linewidth = 2
 
@@ -458,7 +462,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
         color = next(cycle(colors))['color']
         if y.get('ylim'):
             ylim = list(y['ylim'])
-            p.extra_y_ranges[str(i)] = Range1d(start=ylim[0], end=ylim[1])
+            p.extra_y_ranges[str(i)] = Range1d(start=ylim[0], end=ylim[1])#, bounds='auto')
         else: #if no ylim defined, calculate min, max and set borders
             max_val=0 
             min_val=0
@@ -472,7 +476,12 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
             p.extra_y_ranges[str(i)] = Range1d(min_val*1.15, max_val*1.15)
             #p.extra_y_ranges[str(i)] = Range1d(
                 #min(0, 1.15 * df[y['col']].min().min()), 1.15 * df[y['col']].max().max()) Implementation with DataFrame
+        unit=[]
         for col in y['col']:
+            try:
+                unit.append(dataItems.loc[dataItems['myPlantName']==col].iat[0,2])
+            except: #catch error if col not in dataItems (should be unnecessary after right setup of calling the function)
+                unit.append('NaN')
             if 'color' in y:
                 color = y['color']
             else:
@@ -480,11 +489,15 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
             func = getattr(p, style) #to choose between different plotting styles
             func(source=source, x=x_ax, y=col, #circle or line
             color=color, y_range_name=str(i), legend_label=col, line_width=linewidth)
-            tooltips.append((col, '@'+col + '{0.2 f} '+y['unit']))  # or 0.0 a
+            
+            tooltips.append((col, '@'+col + '{0.2 f} '+unit[-1]))  # or 0.0 a
+        
+                
 
-        
-        
-        llabel = ', '.join(y['col'])+' ['+y['unit']+']'
+        if len(unit)==1:
+            llabel = ', '.join(y['col'])+' ['+unit[0]+']'
+        else:
+            llabel = ', '.join(y['col'])+' ['+', '.join(unit)+']'
         
         if len(llabel) > 90:
                 llabel = llabel[:86] + ' ...'
