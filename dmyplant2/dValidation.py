@@ -26,11 +26,18 @@ class HandleID():
             [[k]+v for k, v in dat.items()], columns=['ID', 'myPlantName', 'unit'])
 
     def _unit_name(self, name):
-        return list(self.df[self.df['myPlantName'] == name]['unit'])[0]
+        try:
+            ret = list(self.df[self.df['myPlantName'] == name]['unit'])[0]
+        except:
+            raise ValueError(f"HandleID: ItemId Name '{name}' not found")
+        return ret
 
     def _unit_id(self, id):
-        erg = list(self.df[self.df['ID'] == id]['unit'])[0]
-        return erg
+        try:
+            ret = list(self.df[self.df['ID'] == id]['unit'])[0]
+        except:
+            raise ValueError(f"HandleID: ItemId number '{id}' not found")        
+        return ret
 
     def datdict(self):
         return {rec['ID']: [rec['myPlantName'], rec['unit']] for rec in self.df.to_dict('records')}
@@ -41,7 +48,7 @@ class HandleID():
         elif name:
             return self._unit_name(name)
         else:
-            raise ValueError("no valid Parameters")
+            raise ValueError("no valid Parameters provided (id or name")
 
 
 class Validation:
