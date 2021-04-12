@@ -343,7 +343,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwar
 
 def dbokeh_chart(source, pltcfg, x='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(10,7), *args, **kwargs):
     """wrapper function for bokeh_chart from Johannes""" 
-    if notebook: output_notebook()
+    if notebook: output_notebook(hide_banner=True)
     if title: title = str(title)
     for col in pltcfg: 
         if not 'unit' in col: col['unit'] = ''
