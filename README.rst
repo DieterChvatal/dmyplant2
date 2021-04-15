@@ -34,6 +34,11 @@ to remove these links use*
 
 *Now you can modify and extend the package in place ...*
 
+some users get "int is not callable" errors after istallation =>
+please update the "arrow" package to >= 1.0.3:
+::
+  conda update arrow
+
 Usage example
 -------------
 
