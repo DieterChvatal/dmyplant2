@@ -60,6 +60,8 @@ class MyPlant:
             self._password = cred['password']
         except FileNotFoundError:
             raise
+        if not os.path.isfile('data/dataitems.csv'):
+            self.create_request_csv()
 
     @ classmethod
     def load_dataitems_csv(cls, filename):
@@ -270,3 +272,26 @@ class MyPlant:
             pd.DataFrame: Stitched Dataframe
         """        
         return pd.DataFrame([])
+
+    def create_request_csv(self):
+        """Create Request_csv with id, name, unit, myPlantName and save in /data"""
+        
+        model=self.fetchdata('/model/J-Engine')
+        dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
+
+        model=pd.json_normalize(model, record_path =['dataItems'])
+
+        dataitems_df=pd.DataFrame(columns=['lan','dataitem', 'lan_item'])
+
+        for lan in dataitems:
+            output=pd.DataFrame(dataitems[lan]['groups'][0]['values'].items(), columns=['dataitem','myPlantName'])
+            output['lan']=lan
+            dataitems_df=dataitems_df.append(output, ignore_index=True)
+        dataitems_df.head()
+
+        def remove_jen (row): #with best practice could probably be shortened
+            return row.split('_',1)[1]
+        dataitems_df['dataitem']=dataitems_df.dataitem.apply(remove_jen)
+        model=model.merge(dataitems_df[dataitems_df.lan=='en'], how='inner', left_on='name', right_on='dataitem')
+        model=model.loc[:,['id', 'name', 'unit', 'myPlantName']]
+        model.to_csv('data/dataitems.csv', sep=';', index=False)
