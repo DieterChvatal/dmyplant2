@@ -9,8 +9,7 @@ based on Success run Method and Lipson Equality approach as described in
 A.Kleyners Paper "Reliability Demonstration in Product Validation
 Testing".
 
-figure:: header.png
-:alt: 
+![](header.png)
 
 Installation
 ------------
