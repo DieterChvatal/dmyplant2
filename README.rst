@@ -9,8 +9,6 @@ based on Success run Method and Lipson Equality approach as described in
 A.Kleyners Paper "Reliability Demonstration in Product Validation
 Testing".
 
-figure:: header.png
-:alt: 
 
 Installation
 ------------
@@ -33,6 +31,11 @@ to remove these links use*
   python setup.py develop --uninstall
 
 *Now you can modify and extend the package in place ...*
+
+some users get "int is not callable" errors after installation =>
+please update the "arrow" package to >= 1.0.3:
+::
+  conda update arrow
 
 Usage example
 -------------

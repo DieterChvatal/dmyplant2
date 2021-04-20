@@ -210,7 +210,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
-def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwargs):
+def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
 
     example:
