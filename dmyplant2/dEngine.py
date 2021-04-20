@@ -481,30 +481,45 @@ class Engine:
             # 237: ['DeltaOpH', 'h'],
             # 228: ['OilVolume', 'ml'],
             # 225: ['ActiveEnergy', 'MWh'],
-            226: ['AvgPower', 'kW']
+            226: ['AvgPower', 'kW'],
         }
 
-        # def calc_delta(adate, bdate):
-        #    return adate.timestamp() - bdate.timestamp()
-
         limit = 3000
+
+        def _localfunc(dloc):
+            dat0 = {
+                161: ['Count_OpHour', 'h'], 
+                102: ['Power_PowerAct', 'kW'],
+            }
+            l_from = arrow.get(dloc.datetime.iloc[-1])
+            _cyclic = self.hist_data(
+                itemIds= dat0, 
+                p_from = l_from,
+                p_to=arrow.now('Europe/Vienna'),
+                timeCycle=60,
+                slot=11
+            )
+            ts_list = list(dloc['time'])
+            oph_list = [_cyclic[_cyclic.time >= a][:1].iloc[0].Count_OpHour - self.oph_start for a in ts_list]
+            dloc['oph_parts'] = oph_list
+            return dloc
 
         try:
             dloc = self._batch_hist_dataItems(
                 itemIds=locdef, p_limit=limit, timeCycle=1)
+            #dloc = add_column(dloc, 161)
             cnt = dloc['OilConsumption'].count()
-            if (cnt != limit):
-                print(
-                    f"LOC, all available data received,\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
-            else:
-                print(
-                    f"limit={int(limit)},\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+            DebugStr = f"Data Start {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}\nVal  Start {arrow.get(self.val_start).format('DD.MM.YYYY')}"
+            DebugStr = "LOC, all available data received,\n" + DebugStr if (cnt != limit) else f"limit={int(limit)},\n" + DebugStr
+            print(DebugStr)
         except:
             raise Exception("Loop Error in Validation_period_LOC")
 
         # skip values before validation start
         dloc = dloc[dloc.datetime > pd.to_datetime(self.val_start)]
 
+        dloc=_localfunc(dloc)
+        
         # Filter outliers by < 3 * stdev - remove refilling, engine work etc..
         dloc = dloc[np.abs(dloc.OilConsumption-dloc.OilConsumption.mean())
                     <= (3*dloc.OilConsumption.std())]
