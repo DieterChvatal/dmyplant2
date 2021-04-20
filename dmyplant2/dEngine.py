@@ -458,6 +458,52 @@ class Engine:
         except:
             raise Exception("Error in call to _batch_hist_dataItems")
 
+    def _Validation_period_LOC_prelim(self):
+        """ Work in progress on a better LOC Function
+            
+            - synchronize other data etc.
+
+        """
+        def _localfunc(dloc):
+            dat0 = {
+                161: ['Count_OpHour', 'h'], 
+                102: ['Power_PowerAct', 'kW'],
+                228: ['Hyd_OilCount_Trend_OilVolume','ml'],
+            }
+
+            l_from = arrow.get(dloc.datetime.iloc[-1])
+            _cyclic = self.hist_data(
+                itemIds= dat0, 
+                p_from = l_from,
+                p_to=arrow.now('Europe/Vienna'),
+                timeCycle=60,
+                slot=11
+            )
+
+
+
+            ts_list = list(dloc['time'])
+            #test = _cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(1618847378615)] - self.oph_start
+            #print( '1618847378615', test )
+
+            # add Count_OpHour
+            value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
+            dloc['oph_parts'] = value_list
+            
+            # add Count_OpHour
+            value_list = [_cyclic['Power_PowerAct'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+            dloc['Power_PowerAct'] = value_list
+
+            # add Count_OpHour
+            value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+            dloc['Power_PoweHyd_OilCount_Trend_OilVolumerAct'] = value_list
+
+            return dloc, _cyclic
+
+        dloc = self.Validation_period_LOC()
+        dloc=_localfunc(dloc)
+        return dloc
+
     def Validation_period_LOC(self):
         """Oilconsumption vs. Validation period
 
@@ -484,25 +530,7 @@ class Engine:
             226: ['AvgPower', 'kW'],
         }
 
-        limit = 3000
-
-        def _localfunc(dloc):
-            dat0 = {
-                161: ['Count_OpHour', 'h'], 
-                102: ['Power_PowerAct', 'kW'],
-            }
-            l_from = arrow.get(dloc.datetime.iloc[-1])
-            _cyclic = self.hist_data(
-                itemIds= dat0, 
-                p_from = l_from,
-                p_to=arrow.now('Europe/Vienna'),
-                timeCycle=60,
-                slot=11
-            )
-            ts_list = list(dloc['time'])
-            oph_list = [_cyclic[_cyclic.time >= a][:1].iloc[0].Count_OpHour - self.oph_start for a in ts_list]
-            dloc['oph_parts'] = oph_list
-            return dloc
+        limit = 4000
 
         try:
             dloc = self._batch_hist_dataItems(
@@ -517,8 +545,6 @@ class Engine:
 
         # skip values before validation start
         dloc = dloc[dloc.datetime > pd.to_datetime(self.val_start)]
-
-        dloc=_localfunc(dloc)
         
         # Filter outliers by < 3 * stdev - remove refilling, engine work etc..
         dloc = dloc[np.abs(dloc.OilConsumption-dloc.OilConsumption.mean())
@@ -639,24 +665,6 @@ class Engine:
         as Int
         """
         return int(self._eng['oph@start'])
-
-    # @ property
-    # def valstart_oph(self):
-    #     """
-    #     Individual Validation Start Date
-    #     as EPOCH timestamp
-    #     e.g.: vs = e.valstart_ts
-    #     """
-    #     return self._d['oph@start']
-
-    # @ property
-    # def now_ts(self):
-    #     """
-    #     Actual Date & Time
-    #     as EPOCH timestamp
-    #     e.g.: now = e.now_ts
-    #     """
-    #     return datetime.now().timestamp()
 
     @ property
     def Count_OpHour(self):
