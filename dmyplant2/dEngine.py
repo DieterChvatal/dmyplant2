@@ -496,7 +496,7 @@ class Engine:
 
             # add Count_OpHour
             value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
-            dloc['Power_PoweHyd_OilCount_Trend_OilVolumerAct'] = value_list
+            dloc['Hyd_OilCount_Trend_OilVolume'] = value_list
 
             return dloc, _cyclic
 
