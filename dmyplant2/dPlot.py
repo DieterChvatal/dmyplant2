@@ -354,13 +354,14 @@ def dbokeh_chart(source, pltcfg, x='datetime', title=None, grid=True, legend=Tru
     fig = bokeh_chart(source, pltcfg, x, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
     show(fig)
 
-def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=(10,7), *args, **kwargs):
+def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=(10,7), *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:
         source (bokeh.ColumnDataSource): Data , e.g downloaded by engine.batch_hist_dataItems(...)
         pltcfg ([list of dicts]): the source columns to plot, and range of y-axis
         x_ax (str, optional): x-axis column as string. Defaults to 'datetime'.
+        x_ax_unit (str, optional): unit of x-axis as string. Defaults to None.
         title (str, optional): Main Title of figure. Defaults to None.
         grid (bool, optional): display grid. Defaults to True.
         legend (bool, optional): legend. Defaults to True.  
@@ -448,11 +449,22 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
     colors = cycle(matplotlib.rcParams['axes.prop_cycle']) #colors to use for plot
     linewidth = 2
 
+    if x_ax_unit is not None: #get unit of x_axis either from user or csv-file
+        x_unit=x_ax_unit
+    else:
+        if pd.Series(x_ax).isin(dataitems.myPlantName).any():
+            x_unit=dataitems.loc[dataitems.myPlantName==x_ax].iat[0,2]
+            if x_unit is np.nan: x_unit=''
+        else:
+            x_unit=''
+
+    x_axis_label=(f'{x_ax} [{x_unit}]')
+
     if (x_ax == 'datetime'): #seperate constructors for object for datetime or no datetime x-axis
         p = figure(
         plot_width=mwidth,
         plot_height=mheight,
-        x_axis_label='datetime',
+        x_axis_label=None,#'datetime',
         x_axis_type='datetime',
         x_range=x_range,
         y_range=y_range,
@@ -462,7 +474,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
         p = figure(
             plot_width=mwidth,
             plot_height=mheight,
-            x_axis_label=x_ax,
+            x_axis_label=x_axis_label,
             tools=TOOLS,
             x_range=x_range,
             y_range=y_range
@@ -547,6 +559,12 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
     p.legend.click_policy='hide' #hides graph when you click on legend, other option mute (makes them less visible)
     p.legend.location = 'top_left'
 
+    try: #if legend has more than 10 entries reduce spacing
+        if len(p.legend.items)>10:
+            p.legend.spacing = 0
+    except:
+        pass
+
     p.title.text = str(title)
     p.title.text_font_size = '20px' 
 
@@ -602,6 +620,54 @@ def datastr_to_dict (datastr):
 
     dat = {rec['id']:[rec['name'], rec['unit']] for rec in rel_data.to_dict('records')}
     return dat, rename
+
+def expand_cylinder (y, rel_cyl=all, engi=0):
+    """Check if parameter cylinder specific and expand if aplicable
+
+    Args:
+        y (dict): one line of a single pltcfg
+        rel_cyl (list, optional): Defines relevant cylinders, defaults to all
+        engi (dmyplant2.engine, optional): Engine instance to get number of cylinders from
+
+    Returns:
+        y (dict): line of a single pltcfg with expanded parameters
+
+    example:
+    .....
+    """
+
+    if rel_cyl is all:
+        if engi is not 0:
+            e_type=engi.get_property('Engine Type')
+            rel_cyl=list(range(1, int(e_type[1:3])+1))
+        else:
+            rel_cyl=list(range(1, 25))
+
+    add_cyl_num=['Exhaust temperature', 'Ignition voltage', 'ITP','Knock integrator','Knock noise',
+    'Pressure 49° before TDC', 'Mechanical noise', 'Cylinder state', 'Close current gradient',
+    'Inlet valve closure noise', 'Inlet valve closure timing', 'Outlet valve closure noise', 'Outlet valve closure timing']
+    add_num=['Knock signal','P-max','AI','IMEP','Duration of opening','Conrod bearing temperature','CQ max','CQ','Slow down time']
+    add_mid=[]#talk with Sebastian what is looked at analyzis
+
+    to_remove=[]
+    for col in y['col']:
+        if col in add_cyl_num and not col in to_remove:
+            for cyl in rel_cyl:
+                y['col'].append(f'{col} cyl. {cyl:02d}')
+                to_remove.append (col)
+
+        if col in add_num and not col in to_remove:
+            for cyl in rel_cyl:
+                y['col'].append(f'{col} {cyl:02d}')
+                to_remove.append (col)
+
+        if col in add_mid and not col in to_remove:
+            for cyl in rel_cyl:
+                y['col'].append(f'{col} cyl. {cyl:02d}')
+                to_remove.append (col)
+
+    y['col']=[i for i in y['col'] if not i in to_remove ] #remove original column
+    return y
 
 if __name__ == '__main__':
     pass
