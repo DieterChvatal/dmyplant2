@@ -169,7 +169,7 @@ class Engine:
         dd = {}
         from_asset = {
             'nokey': ['serialNumber', 'status', 'id', 'model'],
-            'properties': ['Engine Version', 'Engine Type', 'IB Unit Commissioning Date', 'Design Number',
+            'properties': ['Engine Version', 'Engine Type', 'Engine Series', 'IB Unit Commissioning Date', 'Design Number',
                            'Engine ID', 'IB Control Software', 'IB Item Description Engine', 'IB Project Name'],
             'dataItems': ['Count_OpHour', 'Count_Start']}
 
@@ -179,6 +179,17 @@ class Engine:
 
         dd['Name'] = eng['Validation Engine']
         self.Name = eng['Validation Engine']
+
+        #PATCH / Workaround for DEN BERK 3, this Engine has no 'Engine Type/Version' information in Myplant
+        if eng['serialNumber'] == 1253867:
+            self.asset['properties']['Engine Type']['value'] = '624'
+            self.asset['properties']['Engine Version']['value'] = 'H01'
+            self.asset['properties']['Engine Series']['value'] = '6'
+            dd['Engine Type'] = self.get_data('properties', 'Engine Type')
+            dd['Engine Version'] = self.get_data('properties', 'Engine Version')
+        #PATCH / Workaround for DEN BERK 3, this Engine has no 'Engine Type/Version' information in Myplant
+
+
         dd['P'] = int(str(dd['Engine Type'])[-2:])
         self._P = dd['P']
         dd['val start'] = eng['val start']
@@ -305,7 +316,7 @@ class Engine:
             pass
 
     def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0):
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, debug=False):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
@@ -349,8 +360,8 @@ class Engine:
                                 list(ldf['time'][-2:-1])[0]).to('Europe/Vienna')
                             # list(ldf['time'][-2:-1])[0] + timeCycle)
                             # new starting point ...
-                            print(
-                                f"\nitemIds: {set(itemIds)}, Shape={ldf.shape}, from: {p_from.format('DD.MM.YYYY - HH:mm')}, to:   {last_p_to.format('DD.MM.YYYY - HH:mm')}, loaded from {fn}")
+                            if debug:
+                                print(f"\nitemIds: {set(itemIds)}, Shape={ldf.shape}, from: {p_from.format('DD.MM.YYYY - HH:mm')}, to:   {last_p_to.format('DD.MM.YYYY - HH:mm')}, loaded from {fn}")
                 except:
                     pass
             return ldf, last_p_to
@@ -366,7 +377,8 @@ class Engine:
                 ndf = self._mp.hist_data(
                     self.id, itemIds, np_from, p_to, timeCycle)
                 df = df.append(ndf)
-                print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
+                if debug:
+                    print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
 
             df.reset_index(drop=True, inplace=True)
 
@@ -469,6 +481,9 @@ class Engine:
                 161: ['Count_OpHour', 'h'], 
                 102: ['Power_PowerAct', 'kW'],
                 228: ['Hyd_OilCount_Trend_OilVolume','ml'],
+                107: ['Various_Values_SpeedAct','rpm'],
+                69: ['Hyd_PressCoolWat','bar'],
+                16546: ['Hyd_PressOilDif','bar']
             }
 
             l_from = arrow.get(dloc.datetime.iloc[-1])
@@ -480,23 +495,28 @@ class Engine:
                 slot=11
             )
 
-
-
             ts_list = list(dloc['time'])
-            #test = _cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(1618847378615)] - self.oph_start
-            #print( '1618847378615', test )
+            loc_list = list(dloc['OilConsumption'])
 
+            # Add Values from _cyclic to dloc
             # add Count_OpHour
-            value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
-            dloc['oph_parts'] = value_list
+            #value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
+            #dloc['oph_parts'] = value_list
             
             # add Count_OpHour
-            value_list = [_cyclic['Power_PowerAct'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
-            dloc['Power_PowerAct'] = value_list
+            #value_list = [_cyclic['Power_PowerAct'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+            #dloc['Power_PowerAct'] = value_list
 
             # add Count_OpHour
-            value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
-            dloc['Hyd_OilCount_Trend_OilVolume'] = value_list
+            #value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+            #dloc['Hyd_OilCount_Trend_OilVolume'] = value_list
+
+
+            # Add Values from dloc to _cyclic
+            #_cyclic['OilConsumption'] = np.nan
+            #for i, ts in enumerate(ts_list):
+            #    _cyclic['OilConsumption'].iloc[_cyclic['time'].values.searchsorted(ts)] = loc_list[i]
+                #print(f"LOC {loc_list[i]} at position {ts} inserted.")
 
             return dloc, _cyclic
 
@@ -753,6 +773,8 @@ class Engine:
         Swept Volume per Engine in [l]
         """
         lkey = self.get_property('Engine Series')
+        if not lkey:
+            lkey = '6'
         return self._cylvol(lkey) * self.Cylinders
 
     @ property
