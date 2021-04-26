@@ -14,6 +14,10 @@ import warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 
+class MyPlantException(Exception):
+    pass
+
+
 class Engine:
     """
     Class to encapsulate Engine properties & methods
@@ -62,11 +66,26 @@ class Engine:
         try:
             # fetch data from Myplant only on conditions below
             if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
-                local_asset = self._mp._asset_data(self._sn)
-                logging.debug(
-                    f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
-                self.asset = self._restructure(local_asset)
-                self._last_fetch_date = epoch_ts(datetime.now().timestamp())
+                try:
+                    local_asset = self._mp._asset_data(self._sn)
+                    logging.debug(
+                     f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
+                    self.asset = self._restructure(local_asset)
+
+                    # add patch.json values
+                    fpatch = os.getcwd() + '/patch.json'
+                    if os.path.exists(fpatch):
+                        with open(os.getcwd() + "/patch.json", "r", encoding='utf-8-sig') as file:
+                            patch = json.load(file)
+                            for k,v in patch['1253867'].items():
+                                if k in self.asset:
+                                    self.asset[k] = {**self.asset[k], **v}
+                                else:
+                                    self.asset[k] = v
+
+                    self._last_fetch_date = epoch_ts(datetime.now().timestamp())
+                except Exception(f"Asset Data downoad for SN {self._sn} failed."):
+                    raise
             else:
                 with open(self._picklefile, 'rb') as handle:
                     self.__dict__ = pickle.load(handle)
@@ -170,7 +189,7 @@ class Engine:
         from_asset = {
             'nokey': ['serialNumber', 'status', 'id', 'model'],
             'properties': ['Engine Version', 'Engine Type', 'Engine Series', 'IB Unit Commissioning Date', 'Design Number',
-                           'Engine ID', 'IB Control Software', 'IB Item Description Engine', 'IB Project Name'],
+                        'Engine ID', 'IB Control Software', 'IB Item Description Engine', 'IB Project Name'],
             'dataItems': ['Count_OpHour', 'Count_Start']}
 
         for key in from_asset:
@@ -181,17 +200,20 @@ class Engine:
         self.Name = eng['Validation Engine']
 
         #PATCH / Workaround for DEN BERK 3, this Engine has no 'Engine Type/Version' information in Myplant
-        if eng['serialNumber'] == 1253867:
-            self.asset['properties']['Engine Type']['value'] = '624'
-            self.asset['properties']['Engine Version']['value'] = 'H01'
-            self.asset['properties']['Engine Series']['value'] = '6'
-            dd['Engine Type'] = self.get_data('properties', 'Engine Type')
-            dd['Engine Version'] = self.get_data('properties', 'Engine Version')
+        # if eng['serialNumber'] == 1253867:
+        #    self.asset['properties']['Engine Type']['value'] = '624'
+        #    self.asset['properties']['Engine Version']['value'] = 'H01'
+        #    self.asset['properties']['Engine Series']['value'] = '6'
+        #    dd['Engine Type'] = self.get_data('properties', 'Engine Type')
+        #    dd['Engine Version'] = self.get_data('properties', 'Engine Version')
         #PATCH / Workaround for DEN BERK 3, this Engine has no 'Engine Type/Version' information in Myplant
 
+        if dd['Engine Type']:
+            dd['P'] = int(str(dd['Engine Type'])[-2:])
+            self._P = dd['P']
+        else:
+            raise Exception(f'Key "Engine Type" missing in asset of SN {self._sn}\nconsider a patch in patch.json')
 
-        dd['P'] = int(str(dd['Engine Type'])[-2:])
-        self._P = dd['P']
         dd['val start'] = eng['val start']
         dd['oph@start'] = eng['oph@start']
 
@@ -200,6 +222,7 @@ class Engine:
         self._valstart_ts = epoch_ts(arrow.get(dd['val start']).timestamp())
         self._lastDataFlowDate = epoch_ts(dd['status'].get(
             'lastDataFlowDate', None))
+
         return dd
 
     def _save(self):
