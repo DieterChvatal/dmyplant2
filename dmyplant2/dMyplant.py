@@ -170,7 +170,10 @@ class MyPlant:
         ----------------------------------------------
         url: /asset?assetType=J-Engine&serialNumber=sn
         """
-        return self.fetchdata(url=r"/asset?assetType=J-Engine&serialNumber=" + str(serialNumber))
+        try:
+            return self.fetchdata(url=r"/asset?assetType=J-Engine&serialNumber=" + str(serialNumber))
+        except:
+            raise
 
     def historical_dataItem(self, id, itemId, timestamp):
         """
@@ -182,7 +185,10 @@ class MyPlant:
         timestamp   int64   Optional,  timestamp in the DataItem history to query for.
         highres     Boolean Whether to use high res data. Much slower but gives the raw data.
         """
-        return self.fetchdata(url=fr"/asset/{id}/dataitem/{itemId}?timestamp={timestamp}")
+        try:
+            return self.fetchdata(url=fr"/asset/{id}/dataitem/{itemId}?timestamp={timestamp}")
+        except:
+            raise
 
     def history_dataItem(self, id, itemId, p_from, p_to, timeCycle=3600):
         """
@@ -195,7 +201,10 @@ class MyPlant:
         p_to        int64   timestamp stop timestamp.
         timeCycle   int64   interval in seconds.
         """
-        return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
+        try:
+            return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
+        except:
+            raise
 
     def _history_batchdata(self, id, itemIds, lp_from, lp_to, timeCycle=3600):
         try:
@@ -229,35 +238,37 @@ class MyPlant:
         timeCycle   int64           interval in seconds.
         cui_log     boolean         report progress on CUI or not
         """
+        try:
+            # initialize a data collector
+            df = pd.DataFrame([])
 
-        # initialize a data collector
-        df = pd.DataFrame([])
+            # calculate how many full rows per request within the myplant limit are possible
+            rows_per_request = maxdatapoints // len(itemIds)
+            rows_total = int(p_to.timestamp() - p_from.timestamp()) // timeCycle
+            pbar = tqdm(total=rows_total)
 
-        # calculate how many full rows per request within the myplant limit are possible
-        rows_per_request = maxdatapoints // len(itemIds)
-        rows_total = int(p_to.timestamp() - p_from.timestamp()) // timeCycle
-        pbar = tqdm(total=rows_total)
+            # initialize loop
+            lp_from = int(p_from.timestamp()) * 1000  # Start at lp_from
+            lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
+                        int(p_to.timestamp()) * 1000)
 
-        # initialize loop
-        lp_from = int(p_from.timestamp()) * 1000  # Start at lp_from
-        lp_to = min((lp_from + rows_per_request * timeCycle * 1000),
-                    int(p_to.timestamp()) * 1000)
-
-        while lp_from < int(p_to.timestamp()) * 1000:
-            # for now assume same itemID's are always included ... need to be included in a check
-            ldf = self._history_batchdata(
-                id, itemIds, lp_from, lp_to, timeCycle)
-            # and append each chunk to the return df
-            df = df.append(ldf)
-            pbar.update(rows_per_request)
-            # calculate next cycle
-            lp_from = lp_to + timeCycle * 1000
-            lp_to = min((lp_to + rows_per_request *
-                         timeCycle * 1000), int(p_to.timestamp()) * 1000)
-        pbar.close()
-        # Addtional Datetime column calculated from timestamp
-        df['datetime'] = pd.to_datetime(df['time'] * 1000000)
-        return df
+            while lp_from < int(p_to.timestamp()) * 1000:
+                # for now assume same itemID's are always included ... need to be included in a check
+                ldf = self._history_batchdata(
+                    id, itemIds, lp_from, lp_to, timeCycle)
+                # and append each chunk to the return df
+                df = df.append(ldf)
+                pbar.update(rows_per_request)
+                # calculate next cycle
+                lp_from = lp_to + timeCycle * 1000
+                lp_to = min((lp_to + rows_per_request *
+                            timeCycle * 1000), int(p_to.timestamp()) * 1000)
+            pbar.close()
+            # Addtional Datetime column calculated from timestamp
+            df['datetime'] = pd.to_datetime(df['time'] * 1000000)
+            return df
+        except:
+            raise
 
     def stitch_df(self, **dataframes):
         """Stitch Dataframes together

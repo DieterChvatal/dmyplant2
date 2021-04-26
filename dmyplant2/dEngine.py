@@ -69,7 +69,7 @@ class Engine:
                 try:
                     local_asset = self._mp._asset_data(self._sn)
                     logging.debug(
-                     f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
+                        f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
                     self.asset = self._restructure(local_asset)
 
                     # add patch.json values
@@ -85,7 +85,7 @@ class Engine:
                                         self.asset[k] = v
 
                     self._last_fetch_date = epoch_ts(datetime.now().timestamp())
-                except Exception(f"Asset Data downoad for SN {self._sn} failed."):
+                except: 
                     raise
             else:
                 with open(self._picklefile, 'rb') as handle:
