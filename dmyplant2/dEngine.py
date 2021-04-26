@@ -77,11 +77,12 @@ class Engine:
                     if os.path.exists(fpatch):
                         with open(os.getcwd() + "/patch.json", "r", encoding='utf-8-sig') as file:
                             patch = json.load(file)
-                            for k,v in patch['1253867'].items():
-                                if k in self.asset:
-                                    self.asset[k] = {**self.asset[k], **v}
-                                else:
-                                    self.asset[k] = v
+                            if self._sn in patch:
+                                for k,v in patch[self._sn].items():
+                                    if k in self.asset:
+                                        self.asset[k] = {**self.asset[k], **v}
+                                    else:
+                                        self.asset[k] = v
 
                     self._last_fetch_date = epoch_ts(datetime.now().timestamp())
                 except Exception(f"Asset Data downoad for SN {self._sn} failed."):
@@ -198,15 +199,6 @@ class Engine:
 
         dd['Name'] = eng['Validation Engine']
         self.Name = eng['Validation Engine']
-
-        #PATCH / Workaround for DEN BERK 3, this Engine has no 'Engine Type/Version' information in Myplant
-        # if eng['serialNumber'] == 1253867:
-        #    self.asset['properties']['Engine Type']['value'] = '624'
-        #    self.asset['properties']['Engine Version']['value'] = 'H01'
-        #    self.asset['properties']['Engine Series']['value'] = '6'
-        #    dd['Engine Type'] = self.get_data('properties', 'Engine Type')
-        #    dd['Engine Version'] = self.get_data('properties', 'Engine Version')
-        #PATCH / Workaround for DEN BERK 3, this Engine has no 'Engine Type/Version' information in Myplant
 
         if dd['Engine Type']:
             dd['P'] = int(str(dd['Engine Type'])[-2:])
