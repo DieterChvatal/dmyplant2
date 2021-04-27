@@ -10,6 +10,9 @@ import statistics
 import sys
 import time
 import traceback
+import warnings
+import logging
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 # Third party imports
 import matplotlib
@@ -207,7 +210,7 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     plt.show()
 
 
-def chart(d, ys, x='datetime', title=None, grid=True, legend=True, *args, **kwargs):
+def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
 
     example:
@@ -347,6 +350,7 @@ def dbokeh_chart(source, pltcfg, x='datetime', title=None, grid=True, legend=Tru
     if title: title = str(title)
     for col in pltcfg: 
         if not 'unit' in col: col['unit'] = ''
+    source = ColumnDataSource(source)   
     fig = bokeh_chart(source, pltcfg, x, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
     show(fig)
 
@@ -397,28 +401,29 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
     e = vl.eng_serialNumber(1145166)
 
     print(f"{e} {e.id}")
-    dat = {
-        161: ['CountOph','h'],
-        102: ['PowerAct','kW'],
-        107: ['Various_Values_SpeedAct','U/min'],
-        217: ['Hyd_PressCrankCase','mbar'],
-        16546: ['Hyd_PressOilDif','bar']
-    }
+    pltcfg=[]
+    pltcfg.append( [
+        {'col': ['Knock integrator cyl. 07']},
+        {'col': ['Ignition voltage cyl. 07']},
+        {'col': ['ITP cyl. 07']},
+        {'col': ['Exhaust temperature cyl. 07']},
+        {'col': ['Operating hours engine']}
+    ])
+
+    datastr=[]
+    for cfg in pltcfg:
+        for y in cfg:
+            datastr += y['col']
+
+    ans=datastr_to_dict(datastr)
+    dat=ans[0]
 
     df = mp.hist_data(
         e.id,
         itemIds=dat,
-        p_from=arrow.get('2021-03-05 05:28').to('Europe/Vienna'),
+        p_from=arrow.get('2021-03-05 04:00').to('Europe/Vienna'),
         p_to=arrow.get('2021-03-05 05:30').to('Europe/Vienna'),
         timeCycle=1)
-
-
-    pltcfg = [
-        {'col': ['PowerAct', 'Various_Values_SpeedAct'], 'unit':'1/min'},  # , 'ylim':(0, 5000) 
-        {'col': ['Various_Values_SpeedAct'], 'ylim':(0, 1800), 'unit':'1/min'},
-        {'col': ['Hyd_PressCrankCase'], 'ylim': [-50, 20], 'unit':'mbar'},
-        {'col': ['Hyd_PressOilDif'], 'ylim':(0, 1), 'unit':'bar'}
-    ]
 
     output_notebook()
 
@@ -428,16 +433,18 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
 
     source = ColumnDataSource(df)
     output_file(title+'.html')
-    p=bokeh_chart(source, pltcfg, title=title)
+    p=bokeh_chart(source, pltcfg[0], title=title)
 
     show(p)
     """
+
     dpi = 80
     mwidth = figsize[0] * dpi
     mheight = figsize[1] * dpi
-    source = ColumnDataSource(source)
-    
-    TOOLS = 'pan, box_zoom, wheel_zoom, box_select, reset, save' #select Tools to display
+
+    dataitems=pd.read_csv('data/dataitems.csv', sep=';')
+
+    TOOLS = 'pan, box_zoom, xwheel_zoom, box_select, undo, reset, save' #select Tools to display
     colors = cycle(matplotlib.rcParams['axes.prop_cycle']) #colors to use for plot
     linewidth = 2
 
@@ -461,43 +468,70 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
             y_range=y_range
         )
 
-    if grid==True:
+    if grid==False:
         p.grid.grid_line_color = None
-
+        
     p.yaxis.visible = False
     tooltips = []
     for i, y in enumerate(pltcfg):
+        to_remove=[]
+        for col in y['col']: #checks if data is available
+            #if not pd.Series(col).isin(dataitems.myPlantName).any(): ### instead of comparing with dataitems compare with source
+            if col not in source.data: ### instead of comparing with dataitems compare with source
+                to_remove.append(col)
+                print (col +' not available! Please check spelling! Not plotted!')
+            elif source.data[col].all()==None: #remove of columns if no measurement taken
+                to_remove.append(col)
+                print (col +' not measured! Can´t be plotted!')
+        y['col'] = [e for e in y['col'] if e not in to_remove] #remove elements not contained in dataframe by assigning new list
+        if len(y['col'])==0: #jump to next iteration if no col remaining
+            continue
+        else:
+            color = next(cycle(colors))['color']
 
-        color = next(cycle(colors))['color']
         if y.get('ylim'):
             ylim = list(y['ylim'])
-            p.extra_y_ranges[str(i)] = Range1d(start=ylim[0], end=ylim[1])
+            p.extra_y_ranges[str(i)] = Range1d(start=ylim[0], end=ylim[1])#, bounds='auto')
         else: #if no ylim defined, calculate min, max and set borders
             max_val=0 
             min_val=0
             for entry in y['col']:
-              maxi=np.amax(source.data[entry])
-              mini=np.amin(source.data[entry])
-              if maxi>max_val:
-                 max_val=maxi
-              if mini<min_val:
-                 min_val=mini
+                maxi=np.amax(source.data[entry])
+                mini=np.amin(source.data[entry])
+                if maxi>max_val:
+                    max_val=maxi
+                if mini<min_val:
+                    min_val=mini
             p.extra_y_ranges[str(i)] = Range1d(min_val*1.15, max_val*1.15)
             #p.extra_y_ranges[str(i)] = Range1d(
                 #min(0, 1.15 * df[y['col']].min().min()), 1.15 * df[y['col']].max().max()) Implementation with DataFrame
+        unit=[]
         for col in y['col']:
+            if not pd.Series(col).isin(dataitems.myPlantName).any(): #Additional if for handling new data rows generated by function, else is normal behaviour
+                if 'unit' in y:
+                    unit.append(y['unit'])
+                else:
+                    unit.append('')
+            else: 
+                unit.append(dataitems.loc[dataitems.myPlantName==col].iat[0,2])
+
+            if unit[-1] is np.nan: unit[-1]=''
+
             if 'color' in y:
                 color = y['color']
             else:
                 color = next(cycle(colors))['color']
+
             func = getattr(p, style) #to choose between different plotting styles
             func(source=source, x=x_ax, y=col, #circle or line
             color=color, y_range_name=str(i), legend_label=col, line_width=linewidth)
-            tooltips.append((col, '@'+col + '{0.2 f} '+y['unit']))  # or 0.0 a
 
-        
-        
-        llabel = ', '.join(y['col'])+' ['+y['unit']+']'
+            tooltips.append((col, '@{'+col +'}{0.2 f} '+unit[-1]))  # or 0.0 a
+
+        if len(unit)==1 or unit.count(unit[0]) == len(unit): #if only one entry or all have the same unit
+            llabel = ', '.join(y['col'])+' ['+unit[0]+']'
+        else:
+            llabel = ', '.join(y['col'])+' ['+', '.join(unit)+']'
         
         if len(llabel) > 90:
                 llabel = llabel[:86] + ' ...'
@@ -507,7 +541,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
                             axis_label=llabel, axis_label_text_color=color), 'left')
 
     p.add_tools(HoverTool(tooltips=tooltips,
-                           mode='mouse'))  # mode=vline -> display a tooltip whenever the cursor is vertically in line                                              with a glyph
+                           mode='mouse'))  # mode=vline -> display a tooltip whenever the cursor is vertically in line with a glyph
     p.toolbar.active_scroll = p.select_one('WheelZoomTool')
 
     p.legend.click_policy='hide' #hides graph when you click on legend, other option mute (makes them less visible)
@@ -517,6 +551,57 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', title=None, grid=True, legend=T
     p.title.text_font_size = '20px' 
 
     return p
+
+def datastr_to_dict (datastr):
+    """Generate dict from myPlantNames
+    In case name is not valid it gets ignored
+
+    Args:
+        datastr (list of str): myPlantNames to be transformed
+
+    Returns:
+        dat (dict): dictionary of dataitems
+        rename (dict): dict of type {name:myPlantName}
+
+    example:
+    .....
+    datastr_to_dict(['test123','Exhaust temperature cyl. 23'])
+
+        Output: 
+        test123 not available! Please check spelling.
+
+        dat={191: ['Exhaust_TempCyl23', 'C (high)']},
+        rename={'Exhaust_TempCyl23': 'Exhaust temperature cyl. 23'}"""
+
+    #updated version, can transform myPlantNames from different languages
+    data=np.unique(datastr).tolist()
+
+    Request_Ids = pd.read_csv('data/dataitems.csv', sep=';')
+    rel_data=pd.DataFrame()
+
+    rename={}
+    for da in data:
+        # try: 
+        #     new=dataitems_df.loc[dataitems_df.myPlantName==da]['dataitem'].values[0]
+        #     rename [new]=da
+        #     da=new
+        # except Exception:
+        #     pass
+
+        data_id=Request_Ids.loc[Request_Ids['myPlantName']==da]
+        if data_id.empty:
+            print(da+' not available! Please check spelling.')
+            warnings.warn(da+' not available! Please check spelling.')
+            #raise Exception(
+                        #r"batch_hist_dataItems, invalid Parameters")
+
+        else:
+            new=Request_Ids.loc[Request_Ids.myPlantName==da]['name'].values[0]
+            rename [new]=da
+            rel_data=rel_data.append(data_id)
+
+    dat = {rec['id']:[rec['name'], rec['unit']] for rec in rel_data.to_dict('records')}
+    return dat, rename
 
 if __name__ == '__main__':
     pass

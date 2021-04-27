@@ -14,6 +14,10 @@ import warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 
+class MyPlantException(Exception):
+    pass
+
+
 class Engine:
     """
     Class to encapsulate Engine properties & methods
@@ -62,11 +66,27 @@ class Engine:
         try:
             # fetch data from Myplant only on conditions below
             if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
-                local_asset = self._mp._asset_data(self._sn)
-                logging.debug(
-                    f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
-                self.asset = self._restructure(local_asset)
-                self._last_fetch_date = epoch_ts(datetime.now().timestamp())
+                try:
+                    local_asset = self._mp._asset_data(self._sn)
+                    logging.debug(
+                        f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
+                    self.asset = self._restructure(local_asset)
+
+                    # add patch.json values
+                    fpatch = os.getcwd() + '/patch.json'
+                    if os.path.exists(fpatch):
+                        with open(os.getcwd() + "/patch.json", "r", encoding='utf-8-sig') as file:
+                            patch = json.load(file)
+                            if self._sn in patch:
+                                for k,v in patch[self._sn].items():
+                                    if k in self.asset:
+                                        self.asset[k] = {**self.asset[k], **v}
+                                    else:
+                                        self.asset[k] = v
+
+                    self._last_fetch_date = epoch_ts(datetime.now().timestamp())
+                except: 
+                    raise
             else:
                 with open(self._picklefile, 'rb') as handle:
                     self.__dict__ = pickle.load(handle)
@@ -169,8 +189,8 @@ class Engine:
         dd = {}
         from_asset = {
             'nokey': ['serialNumber', 'status', 'id', 'model'],
-            'properties': ['Engine Version', 'Engine Type', 'IB Unit Commissioning Date', 'Design Number',
-                           'Engine ID', 'IB Control Software', 'IB Item Description Engine', 'IB Project Name'],
+            'properties': ['Engine Version', 'Engine Type', 'Engine Series', 'IB Unit Commissioning Date', 'Design Number',
+                        'Engine ID', 'IB Control Software', 'IB Item Description Engine', 'IB Project Name'],
             'dataItems': ['Count_OpHour', 'Count_Start']}
 
         for key in from_asset:
@@ -179,8 +199,13 @@ class Engine:
 
         dd['Name'] = eng['Validation Engine']
         self.Name = eng['Validation Engine']
-        dd['P'] = int(str(dd['Engine Type'])[-2:])
-        self._P = dd['P']
+
+        if dd['Engine Type']:
+            dd['P'] = int(str(dd['Engine Type'])[-2:])
+            self._P = dd['P']
+        else:
+            raise Exception(f'Key "Engine Type" missing in asset of SN {self._sn}\nconsider a patch in patch.json')
+
         dd['val start'] = eng['val start']
         dd['oph@start'] = eng['oph@start']
 
@@ -189,6 +214,7 @@ class Engine:
         self._valstart_ts = epoch_ts(arrow.get(dd['val start']).timestamp())
         self._lastDataFlowDate = epoch_ts(dd['status'].get(
             'lastDataFlowDate', None))
+
         return dd
 
     def _save(self):
@@ -305,7 +331,7 @@ class Engine:
             pass
 
     def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0):
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, debug=False):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
@@ -349,8 +375,8 @@ class Engine:
                                 list(ldf['time'][-2:-1])[0]).to('Europe/Vienna')
                             # list(ldf['time'][-2:-1])[0] + timeCycle)
                             # new starting point ...
-                            print(
-                                f"\nitemIds: {set(itemIds)}, Shape={ldf.shape}, from: {p_from.format('DD.MM.YYYY - HH:mm')}, to:   {last_p_to.format('DD.MM.YYYY - HH:mm')}, loaded from {fn}")
+                            if debug:
+                                print(f"\nitemIds: {set(itemIds)}, Shape={ldf.shape}, from: {p_from.format('DD.MM.YYYY - HH:mm')}, to:   {last_p_to.format('DD.MM.YYYY - HH:mm')}, loaded from {fn}")
                 except:
                     pass
             return ldf, last_p_to
@@ -366,7 +392,8 @@ class Engine:
                 ndf = self._mp.hist_data(
                     self.id, itemIds, np_from, p_to, timeCycle)
                 df = df.append(ndf)
-                print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
+                if debug:
+                    print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
 
             df.reset_index(drop=True, inplace=True)
 
@@ -458,6 +485,60 @@ class Engine:
         except:
             raise Exception("Error in call to _batch_hist_dataItems")
 
+    def _Validation_period_LOC_prelim(self):
+        """ Work in progress on a better LOC Function
+            
+            - synchronize other data etc.
+
+        """
+        def _localfunc(dloc):
+            dat0 = {
+                161: ['Count_OpHour', 'h'], 
+                102: ['Power_PowerAct', 'kW'],
+                228: ['Hyd_OilCount_Trend_OilVolume','ml'],
+                107: ['Various_Values_SpeedAct','rpm'],
+                69: ['Hyd_PressCoolWat','bar'],
+                16546: ['Hyd_PressOilDif','bar']
+            }
+
+            l_from = arrow.get(dloc.datetime.iloc[-1])
+            _cyclic = self.hist_data(
+                itemIds= dat0, 
+                p_from = l_from,
+                p_to=arrow.now('Europe/Vienna'),
+                timeCycle=60,
+                slot=11
+            )
+
+            ts_list = list(dloc['time'])
+            loc_list = list(dloc['OilConsumption'])
+
+            # Add Values from _cyclic to dloc
+            # add Count_OpHour
+            #value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
+            #dloc['oph_parts'] = value_list
+            
+            # add Count_OpHour
+            #value_list = [_cyclic['Power_PowerAct'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+            #dloc['Power_PowerAct'] = value_list
+
+            # add Count_OpHour
+            #value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+            #dloc['Hyd_OilCount_Trend_OilVolume'] = value_list
+
+
+            # Add Values from dloc to _cyclic
+            #_cyclic['OilConsumption'] = np.nan
+            #for i, ts in enumerate(ts_list):
+            #    _cyclic['OilConsumption'].iloc[_cyclic['time'].values.searchsorted(ts)] = loc_list[i]
+                #print(f"LOC {loc_list[i]} at position {ts} inserted.")
+
+            return dloc, _cyclic
+
+        dloc = self.Validation_period_LOC()
+        dloc=_localfunc(dloc)
+        return dloc
+
     def Validation_period_LOC(self):
         """Oilconsumption vs. Validation period
 
@@ -481,30 +562,25 @@ class Engine:
             # 237: ['DeltaOpH', 'h'],
             # 228: ['OilVolume', 'ml'],
             # 225: ['ActiveEnergy', 'MWh'],
-            226: ['AvgPower', 'kW']
+            226: ['AvgPower', 'kW'],
         }
 
-        # def calc_delta(adate, bdate):
-        #    return adate.timestamp() - bdate.timestamp()
-
-        limit = 3000
+        limit = 4000
 
         try:
             dloc = self._batch_hist_dataItems(
                 itemIds=locdef, p_limit=limit, timeCycle=1)
+            #dloc = add_column(dloc, 161)
             cnt = dloc['OilConsumption'].count()
-            if (cnt != limit):
-                print(
-                    f"LOC, all available data received,\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
-            else:
-                print(
-                    f"limit={int(limit)},\nstart {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')} val start {arrow.get(self.val_start).format('DD.MM.YYYY')}")
+            DebugStr = f"Data Start {arrow.get(dloc.datetime.iloc[-1]).format('DD.MM.YYYY')}\nVal  Start {arrow.get(self.val_start).format('DD.MM.YYYY')}"
+            DebugStr = "LOC, all available data received,\n" + DebugStr if (cnt != limit) else f"limit={int(limit)},\n" + DebugStr
+            print(DebugStr)
         except:
             raise Exception("Loop Error in Validation_period_LOC")
 
         # skip values before validation start
         dloc = dloc[dloc.datetime > pd.to_datetime(self.val_start)]
-
+        
         # Filter outliers by < 3 * stdev - remove refilling, engine work etc..
         dloc = dloc[np.abs(dloc.OilConsumption-dloc.OilConsumption.mean())
                     <= (3*dloc.OilConsumption.std())]
@@ -625,24 +701,6 @@ class Engine:
         """
         return int(self._eng['oph@start'])
 
-    # @ property
-    # def valstart_oph(self):
-    #     """
-    #     Individual Validation Start Date
-    #     as EPOCH timestamp
-    #     e.g.: vs = e.valstart_ts
-    #     """
-    #     return self._d['oph@start']
-
-    # @ property
-    # def now_ts(self):
-    #     """
-    #     Actual Date & Time
-    #     as EPOCH timestamp
-    #     e.g.: now = e.now_ts
-    #     """
-    #     return datetime.now().timestamp()
-
     @ property
     def Count_OpHour(self):
         """
@@ -730,6 +788,8 @@ class Engine:
         Swept Volume per Engine in [l]
         """
         lkey = self.get_property('Engine Series')
+        if not lkey:
+            lkey = '6'
         return self._cylvol(lkey) * self.Cylinders
 
     @ property
@@ -761,7 +821,13 @@ class Engine:
             '624': 0.981,
             '620': 0.98,
             '616': 0.976,
-            '612': 0.986
+            '612': 0.986,
+            '312': 0.965,
+            '316': 0.925,
+            '320': 0.975,
+            '412': 0.973,
+            '416': 0.974,
+            '420': 0.973
         }
         lkey = self.get_property('Engine Type')
         return el_eff[lkey] or 0.95
