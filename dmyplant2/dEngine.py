@@ -21,6 +21,7 @@ class MyPlantException(Exception):
 class Engine:
     """
     Class to encapsulate Engine properties & methods
+    for MyPlant Access
     """
     _sn = 0
     _picklefile = ''
