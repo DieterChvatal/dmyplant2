@@ -692,5 +692,59 @@ def shrink_cylinder (y, rel_cyl=list(range(1, 25))):
     y['col']=[i for i in y['col'] if not i in to_remove ] #remove original column
     return y
 
+def load_pltcfg_from_excel ():
+    """Load plotconfig from Excel Sheet "Input" necessary in same folder
+
+    Returns:
+        pltcfg (list of dicts): pltcfg with list of dicts
+        plt_titles (list of String): titles of plots
+    .....
+    """
+
+    import math
+    def is_number(s):
+        """ Returns True is string is a number. """
+        try:
+            float(s)
+            return math.isfinite(s)
+        except ValueError:
+            return False
+
+    df_cfg=pd.read_excel('Input.xlsx', sheet_name='Pltcfg', usecols=['Plot_Nr', 'Axis_Nr', 'Name', 'Unit', 'y-lim min', 'y-lim max'])
+    df_cfg.sort_values(by=['Plot_Nr','Axis_Nr'], inplace=True)
+    df_cfg.dropna(subset=['Plot_Nr', 'Axis_Nr', 'Name'], inplace=True)
+    df_cfg['p_equal'] = df_cfg.Plot_Nr.eq(df_cfg.Plot_Nr.shift())
+    df_cfg['a_equal'] = df_cfg.Axis_Nr.eq(df_cfg.Axis_Nr.shift())
+
+    pltcfg=[]
+    plt_titles=[]
+    for i in range(len(df_cfg)):
+        if df_cfg.p_equal.iloc[i]==False:
+            pltcfg.append([]) #new plot
+            if df_cfg.Axis_Nr.iloc[i]==0: #append title if axis=0
+                plt_titles.append(df_cfg.Name.iloc[i]) #append title
+            else: 
+                plt_titles.append('')
+
+        if df_cfg.Axis_Nr.iloc[i]!=0:
+            if df_cfg.a_equal.iloc[i]==False:
+                pltcfg[-1].append(dict()) #new axis
+        
+            y=pltcfg[-1][-1]
+            if type(df_cfg.Name.iloc[i])==str:
+                if 'col' in y:
+                    y['col'].append(df_cfg.Name.iloc[i].replace('\xa0', ' '))
+                else:
+                    y['col']=[df_cfg.Name.iloc[i].replace('\xa0', ' ')]
+                if 'unit' not in y and type(df_cfg.Unit.iloc[i])==str: #take first occurance of unit
+                    y['unit']=df_cfg.Unit.iloc[i].replace('\xa0', ' ')
+
+                lim_min=df_cfg['y-lim min'].iloc[i]
+                lim_max=df_cfg['y-lim max'].iloc[i]
+                if 'ylim' not in y and is_number(lim_min) and is_number(lim_max):
+                    y['ylim']=(lim_min, lim_max) #add tuple y lim
+    return pltcfg, plt_titles
+
+
 if __name__ == '__main__':
     pass
