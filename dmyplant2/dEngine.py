@@ -4,6 +4,7 @@ from pprint import pprint as pp
 import pandas as pd
 import numpy as np
 from dmyplant2.dMyplant import epoch_ts, mp_ts
+from dmyplant2.dPlot import datastr_to_dict
 import sys
 import os
 import pickle
@@ -557,7 +558,7 @@ class Engine:
             225: ['ActiveEnergy', 'MWh'],
             226: ['AvgPower', 'kW']
         """
-        # Lube Oil Consuption data
+        # Lube Oil Consumption data
         locdef = {
             227: ['OilConsumption', 'g/kWh'],
             # 237: ['DeltaOpH', 'h'],
@@ -590,6 +591,79 @@ class Engine:
         dloc['LOC'] = dloc.OilConsumption.rolling(10).mean()
         dloc['Pow'] = dloc.AvgPower.rolling(10).mean()
         return dloc
+
+    def timestamp_LOC(self,starttime, endtime, windowsize=50, return_OPH=False):  #starttime, endtime, 
+        """Oilconsumption vs. Validation period
+
+        Args:
+            starttime: arrow object in right timezone
+            endtime: arrow object in right timezone
+            windowsize (optional): Engine instance to get number of cylinders from
+            return_OPH (optional): Option to directly return the engine OPH in the dataframe at the LOC-data points
+
+        Returns:
+            pd.DataFrame:
+
+        """
+        #Lube Oil Consumption data
+        locdef = ['Operating hours engine', 'Oil counter active energy', 'Oil counter power average', 'Oil counter oil consumption', 'Oil counter oil volume', 'Oil counter operational hours delta']
+        
+        ans1=datastr_to_dict(locdef)
+        locdef=ans1[0]
+        try:
+            dloc = self.hist_data(
+                itemIds=locdef, p_from=starttime,
+                p_to=endtime, timeCycle=3600, slot=1)
+            dloc.rename(columns = ans1[1], inplace = True)
+
+            dloc.drop(['time'], axis=1, inplace=True)
+            dloc = dloc.set_index('datetime')
+            dloc=dloc.drop_duplicates(['Oil counter active energy', 'Oil counter power average', 'Oil counter oil consumption', 'Oil counter oil volume', 'Oil counter operational hours delta'])
+
+
+            dloc.drop(dloc[((dloc['Oil counter oil volume']*10)%1!=0)].index, inplace=True)
+            dloc.drop(dloc[(dloc['Oil counter power average']%1!=0)].index, inplace=True)
+            dloc.drop(dloc[(dloc['Oil counter operational hours delta']%1!=0)].index, inplace=True)
+
+
+            hoursum = 0
+            volumesum = 0
+            energysum = 0
+            powersum = 0
+            count = 0
+
+            LOC_ws = []
+            LOC_raw = []
+            hours_filtered=[]
+            OPH_engine=[]
+
+            for i in range(len(dloc)):
+                hoursum = hoursum + dloc.iloc[i, dloc.columns.get_loc('Oil counter operational hours delta')]
+                volumesum = volumesum + dloc.iloc[i, dloc.columns.get_loc('Oil counter oil volume')]
+                energysum = energysum + dloc.iloc[i, dloc.columns.get_loc('Oil counter active energy')]
+
+                if hoursum >= windowsize:
+                    LOC_ws.append(volumesum * 0.886 / energysum) #only make 3 decimal points
+                    hoursum = 0
+                    volumesum = 0
+                    energysum = 0
+                else:
+                    LOC_ws.append(np.nan)
+
+                LOC_raw.append (dloc.iloc[i, dloc.columns.get_loc('Oil counter oil consumption')])
+                OPH_engine.append(dloc.iloc[i, dloc.columns.get_loc('Operating hours engine')])
+                hours_filtered.append(dloc.index[i])
+
+            
+            if return_OPH:
+                dfres = pd.DataFrame(data={'datetime': hours_filtered, 'OPH_engine': OPH_engine, 'LOC_average': LOC_ws, 'LOC_raw': LOC_raw})
+            else:
+                dfres = pd.DataFrame(data={'datetime': hours_filtered, 'LOC_average': LOC_ws, 'LOC_raw': LOC_raw})
+
+            dfres=dfres.set_index('datetime')
+        except:
+                raise Exception("Loop Error in Validation_period_LOC")
+        return dfres
 
     def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
