@@ -663,7 +663,7 @@ def expand_cylinder (y, rel_cyl=all, engi=0):
 
 def shrink_cylinder (y, rel_cyl=list(range(1, 25))):
     """Sort out some cylinder specific parameters, so that only the ones interested in are displayed
-        The rest isloaded beforehand for shorter overall loading time
+        The rest is loaded beforehand for shorter overall loading time
 
     Args:
         y (dict): one line of a single pltcfg
@@ -710,7 +710,7 @@ def load_pltcfg_from_excel ():
         except ValueError:
             return False
 
-    df_cfg=pd.read_excel('Input.xlsx', sheet_name='Pltcfg', usecols=['Plot_Nr', 'Axis_Nr', 'Name', 'Unit', 'y-lim min', 'y-lim max'])
+    df_cfg=pd.read_excel('Input_validation_dashboard.xlsx', sheet_name='Pltcfg', usecols=['Plot_Nr', 'Axis_Nr', 'Name', 'Unit', 'y-lim min', 'y-lim max'])
     df_cfg.sort_values(by=['Plot_Nr','Axis_Nr'], inplace=True)
     df_cfg.dropna(subset=['Plot_Nr', 'Axis_Nr', 'Name'], inplace=True)
     df_cfg['p_equal'] = df_cfg.Plot_Nr.eq(df_cfg.Plot_Nr.shift())
