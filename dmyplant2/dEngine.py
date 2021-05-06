@@ -264,7 +264,10 @@ class Engine:
         >>> e.get_data('properties','nothing') == None
         True
         """
-        return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
+        try:
+            return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
+        except:
+            raise
 
     def get_property(self, item):
         """
@@ -279,7 +282,10 @@ class Engine:
         >>> e.get_property('nothing') == None
         True
         """
-        return self.get_data('properties', item)
+        try:
+            return self.get_data('properties', item)
+        except:
+            raise            
 
     def get_dataItem(self, item):
         """
@@ -294,8 +300,11 @@ class Engine:
         >>> e.get_dataItem('nothing') == None
         True
         """
-        return self.get_data('dataItems', item)
-
+        try:
+            return self.get_data('dataItems', item)
+        except:
+            raise
+        
     def historical_dataItem(self, itemId, timestamp):
         """
         Get historical dataItem

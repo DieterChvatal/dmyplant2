@@ -74,7 +74,10 @@ class Validation:
         # create and initialise all Engine Instances
         self._engines = []
         for eng in engines:
-            e = lengine(mp, eng)
+            try:
+                e = lengine(mp, eng)
+            except:
+                raise Exception("Engine Instance could not be created.")
             self._engines.append(e)
             log = f"{eng['n']:02d} {e}"
             logging.info(log)
