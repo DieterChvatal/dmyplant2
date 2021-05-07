@@ -309,8 +309,11 @@ class MyPlant:
     def create_request_csv(self):
         """Create Request_csv with id, name, unit, myPlantName and save in /data"""
         
-        model=self.fetchdata('/model/J-Engine')
-        dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
+        try:
+            model=self.fetchdata('/model/J-Engine')
+            dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
+        except:
+            raise
 
         model=pd.json_normalize(model, record_path =['dataItems'])
 

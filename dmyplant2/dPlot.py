@@ -344,14 +344,14 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True
     if legend:
         axes[0].legend(lns, labs, loc=0)
 
-def dbokeh_chart(source, pltcfg, x='datetime', title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(10,7), *args, **kwargs):
+def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(10,7), *args, **kwargs):
     """wrapper function for bokeh_chart from Johannes""" 
     if notebook: output_notebook(hide_banner=True)
     if title: title = str(title)
     for col in pltcfg: 
         if not 'unit' in col: col['unit'] = ''
     source = ColumnDataSource(source)   
-    fig = bokeh_chart(source, pltcfg, x, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
+    fig = bokeh_chart(source, pltcfg, x, x_ax_unit, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
     show(fig)
 
 def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=(10,7), *args, **kwargs):

@@ -101,7 +101,10 @@ class Engine:
         finally:
             logging.debug(
                 f"Initialize Engine Object, SerialNumber: {self._sn}")
-            self._d = self._engine_data(eng)
+            try:
+                self._d = self._engine_data(eng)
+            except:
+                raise
             self._set_oph_parameter()
             self._save()
 
@@ -197,7 +200,10 @@ class Engine:
 
         for key in from_asset:
             for ditem in from_asset[key]:
-                dd[ditem] = self.get_data(key, ditem)
+                try:
+                    dd[ditem] = self.get_data(key, ditem)
+                except:
+                    raise
 
         dd['Name'] = eng['Validation Engine']
         self.Name = eng['Validation Engine']
@@ -1008,8 +1014,11 @@ class Engine_SN(Engine):
                 'val start': '2000-01-01',
                 'oph@start': 0
             }
-
-        super().__init__(mp, eng)
+        try:
+            super().__init__(mp, eng)
+        except:
+            print("Could not create Engine Object")
+            sys.exit(1)
 
         # use Myplant Data to update some fake variables
         self.Name = self._d['IB Project Name']
