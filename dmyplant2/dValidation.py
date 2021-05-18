@@ -2,6 +2,7 @@
 from functools import reduce
 import pandas as pd
 import numpy as np
+import sys
 import logging
 from dmyplant2.dEngine import Engine
 from pprint import pprint as pp
@@ -77,7 +78,8 @@ class Validation:
             try:
                 e = lengine(mp, eng)
             except:
-                raise Exception("Engine Instance could not be created.")
+                print("Engine Instances cannot not be created.")
+                sys.exit(1)
             self._engines.append(e)
             log = f"{eng['n']:02d} {e}"
             logging.info(log)
