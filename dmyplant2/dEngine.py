@@ -22,7 +22,9 @@ class MyPlantException(Exception):
 class Engine:
     """
     Class to encapsulate Engine properties & methods
+    for easy MyPlant Access
     """
+    
     _sn = 0
     _picklefile = ''
     _properties = {}
@@ -100,7 +102,10 @@ class Engine:
         finally:
             logging.debug(
                 f"Initialize Engine Object, SerialNumber: {self._sn}")
-            self._d = self._engine_data(eng)
+            try:
+                self._d = self._engine_data(eng)
+            except:
+                raise
             self._set_oph_parameter()
             self._save()
 
@@ -196,7 +201,10 @@ class Engine:
 
         for key in from_asset:
             for ditem in from_asset[key]:
-                dd[ditem] = self.get_data(key, ditem)
+                try:
+                    dd[ditem] = self.get_data(key, ditem)
+                except:
+                    raise
 
         dd['Name'] = eng['Validation Engine']
         self.Name = eng['Validation Engine']
@@ -263,7 +271,10 @@ class Engine:
         >>> e.get_data('properties','nothing') == None
         True
         """
-        return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
+        try:
+            return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
+        except:
+            raise
 
     def get_property(self, item):
         """
@@ -278,7 +289,10 @@ class Engine:
         >>> e.get_property('nothing') == None
         True
         """
-        return self.get_data('properties', item)
+        try:
+            return self.get_data('properties', item)
+        except:
+            raise            
 
     def get_dataItem(self, item):
         """
@@ -293,8 +307,11 @@ class Engine:
         >>> e.get_dataItem('nothing') == None
         True
         """
-        return self.get_data('dataItems', item)
-
+        try:
+            return self.get_data('dataItems', item)
+        except:
+            raise
+        
     def historical_dataItem(self, itemId, timestamp):
         """
         Get historical dataItem
@@ -332,7 +349,7 @@ class Engine:
             pass
 
     def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, debug=False):
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, debug=False, userfunc=None):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
@@ -401,6 +418,9 @@ class Engine:
             dinfo = collect_info()
             dinfo.to_hdf(fn, "info", complevel=6)
             df.to_hdf(fn, "data", complevel=6)
+            if userfunc:
+                print("Calling user defined function...")
+                df = userfunc(df)
 
             return df
         except:
@@ -486,59 +506,59 @@ class Engine:
         except:
             raise Exception("Error in call to _batch_hist_dataItems")
 
-    def _Validation_period_LOC_prelim(self):
-        """ Work in progress on a better LOC Function
+    # def _Validation_period_LOC_prelim(self):
+    #     """ Work in progress on a better LOC Function
             
-            - synchronize other data etc.
+    #         - synchronize other data etc.
 
-        """
-        def _localfunc(dloc):
-            dat0 = {
-                161: ['Count_OpHour', 'h'], 
-                102: ['Power_PowerAct', 'kW'],
-                228: ['Hyd_OilCount_Trend_OilVolume','ml'],
-                107: ['Various_Values_SpeedAct','rpm'],
-                69: ['Hyd_PressCoolWat','bar'],
-                16546: ['Hyd_PressOilDif','bar']
-            }
+    #     """
+    #     def _localfunc(dloc):
+    #         dat0 = {
+    #             161: ['Count_OpHour', 'h'], 
+    #             102: ['Power_PowerAct', 'kW'],
+    #             228: ['Hyd_OilCount_Trend_OilVolume','ml'],
+    #             107: ['Various_Values_SpeedAct','rpm'],
+    #             69: ['Hyd_PressCoolWat','bar'],
+    #             16546: ['Hyd_PressOilDif','bar']
+    #         }
 
-            l_from = arrow.get(dloc.datetime.iloc[-1])
-            _cyclic = self.hist_data(
-                itemIds= dat0, 
-                p_from = l_from,
-                p_to=arrow.now('Europe/Vienna'),
-                timeCycle=60,
-                slot=11
-            )
+    #         l_from = arrow.get(dloc.datetime.iloc[-1])
+    #         _cyclic = self.hist_data(
+    #             itemIds= dat0, 
+    #             p_from = l_from,
+    #             p_to=arrow.now('Europe/Vienna'),
+    #             timeCycle=60,
+    #             slot=11
+    #         )
 
-            ts_list = list(dloc['time'])
-            loc_list = list(dloc['OilConsumption'])
+    #         ts_list = list(dloc['time'])
+    #         loc_list = list(dloc['OilConsumption'])
 
-            # Add Values from _cyclic to dloc
-            # add Count_OpHour
-            #value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
-            #dloc['oph_parts'] = value_list
+    #         # Add Values from _cyclic to dloc
+    #         # add Count_OpHour
+    #         #value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
+    #         #dloc['oph_parts'] = value_list
             
-            # add Count_OpHour
-            #value_list = [_cyclic['Power_PowerAct'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
-            #dloc['Power_PowerAct'] = value_list
+    #         # add Count_OpHour
+    #         #value_list = [_cyclic['Power_PowerAct'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+    #         #dloc['Power_PowerAct'] = value_list
 
-            # add Count_OpHour
-            #value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
-            #dloc['Hyd_OilCount_Trend_OilVolume'] = value_list
+    #         # add Count_OpHour
+    #         #value_list = [_cyclic['Hyd_OilCount_Trend_OilVolume'].iloc[_cyclic['time'].values.searchsorted(a)] for a in ts_list]
+    #         #dloc['Hyd_OilCount_Trend_OilVolume'] = value_list
 
 
-            # Add Values from dloc to _cyclic
-            #_cyclic['OilConsumption'] = np.nan
-            #for i, ts in enumerate(ts_list):
-            #    _cyclic['OilConsumption'].iloc[_cyclic['time'].values.searchsorted(ts)] = loc_list[i]
-                #print(f"LOC {loc_list[i]} at position {ts} inserted.")
+    #         # Add Values from dloc to _cyclic
+    #         #_cyclic['OilConsumption'] = np.nan
+    #         #for i, ts in enumerate(ts_list):
+    #         #    _cyclic['OilConsumption'].iloc[_cyclic['time'].values.searchsorted(ts)] = loc_list[i]
+    #             #print(f"LOC {loc_list[i]} at position {ts} inserted.")
 
-            return dloc, _cyclic
+    #         return dloc, _cyclic
 
-        dloc = self.Validation_period_LOC()
-        dloc=_localfunc(dloc)
-        return dloc
+    #     dloc = self.Validation_period_LOC()
+    #     dloc=_localfunc(dloc)
+    #     return dloc
 
     def Validation_period_LOC(self):
         """Oilconsumption vs. Validation period
@@ -878,7 +898,10 @@ class Engine:
         """
         Nominal electrical Power in [kW]
         """
-        return np.around(float(self.get_dataItem('Power_PowerNominal')), decimals=0)
+        try:
+            return np.around(float(self.get_dataItem('Power_PowerNominal')), decimals=0)
+        except:
+            return 0.0
 
     @ property
     def cos_phi(self):
@@ -998,8 +1021,11 @@ class Engine_SN(Engine):
                 'val start': '2000-01-01',
                 'oph@start': 0
             }
-
-        super().__init__(mp, eng)
+        try:
+            super().__init__(mp, eng)
+        except:
+            print("Could not create Engine Object")
+            sys.exit(1)
 
         # use Myplant Data to update some fake variables
         self.Name = self._d['IB Project Name']

@@ -4,11 +4,16 @@ import base64
 import requests
 import logging
 import os
+import sys
 from datetime import datetime, timedelta
 from tqdm.auto import tqdm
 import time
 import pickle
 import pandas as pd
+try:
+    import httplib
+except:
+    import http.client as httplib
 
 maxdatapoints = 100000  # Datapoints per request, limited by Myplant
 
@@ -30,7 +35,6 @@ def mp_ts(ts) -> int:
 class MyPlantException(Exception):
     pass
 
-
 burl = 'https://api.myplant.io'
 errortext = {
     200: 'successful operation',
@@ -42,6 +46,16 @@ errortext = {
 }
 
 
+def have_internet():
+    conn = httplib.HTTPConnection('api.myplant.io', timeout=5)
+    try:
+        conn.request("HEAD", "/")
+        conn.close()
+        return True
+    except:
+        conn.close()
+        return False
+
 class MyPlant:
 
     _name = ''
@@ -51,6 +65,9 @@ class MyPlant:
 
     def __init__(self, caching=7200):
         """MyPlant Constructor"""
+        if not have_internet():
+            raise Exception("Error, Check Internet Connection!")
+
         self._caching = caching
         # load and manage credentials from hidden file
         try:
@@ -62,6 +79,9 @@ class MyPlant:
             raise
         if not os.path.isfile('data/dataitems.csv'):
             self.create_request_csv()
+
+    def del_Credentials(self):
+            os.remove("./data/.credentials")
 
     @ classmethod
     def load_dataitems_csv(cls, filename):
@@ -131,12 +151,14 @@ class MyPlant:
                     logging.error(f'Myplant login attempt #{loop}')
                     time.sleep(1)
                 if loop >= 3:
-                    logging.error(f'Login {self._name} failed')
-                    raise MyPlantException(
-                        f'Login {self._name} failed')
+                    logging.error(f'Login {self.deBase64(self._name)} failed')
+                    raise Exception(
+                        f'Login {self.deBase64(self._name)} failed')
+                    
             except:
-                raise
-
+                self.del_Credentials()
+                raise Exception("Login Failed, invalid Credentials ?")
+                
     def logout(self):
         """Logout from Myplant and release self._session"""
         if self._session != None:
@@ -287,8 +309,11 @@ class MyPlant:
     def create_request_csv(self):
         """Create Request_csv with id, name, unit, myPlantName and save in /data"""
         
-        model=self.fetchdata('/model/J-Engine')
-        dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
+        try:
+            model=self.fetchdata('/model/J-Engine')
+            dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
+        except:
+            raise
 
         model=pd.json_normalize(model, record_path =['dataItems'])
 

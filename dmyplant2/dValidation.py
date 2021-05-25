@@ -2,6 +2,7 @@
 from functools import reduce
 import pandas as pd
 import numpy as np
+import sys
 import logging
 from dmyplant2.dEngine import Engine
 from pprint import pprint as pp
@@ -74,7 +75,11 @@ class Validation:
         # create and initialise all Engine Instances
         self._engines = []
         for eng in engines:
-            e = lengine(mp, eng)
+            try:
+                e = lengine(mp, eng)
+            except:
+                print("Engine Instances cannot not be created.")
+                sys.exit(1)
             self._engines.append(e)
             log = f"{eng['n']:02d} {e}"
             logging.info(log)
@@ -104,6 +109,30 @@ class Validation:
         dv = pd.read_csv(filename, sep=';', encoding='utf-8')
         dv['val start'] = pd.to_datetime(dv['val start'], format='%d.%m.%Y')
         return dv
+
+    @ classmethod
+    def load_def_excel(cls, filename, sheetname):
+        """load CSV Validation definition file 
+
+        example content:
+        n;Validation Engine;serialNumber;val start;oph@start;starts@start;Asset ID;Old PU first replaced OPH;Old PUs replaced before upgrade
+        0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378;103791;;
+        ....
+        
+        Args:
+            filename ([string]): [Filename of definition file] must include .xslx at the end
+            sheetname ([string]): Relevant sheetname in file
+
+        Returns:
+            [pd.dataFrame]: [Validation definition as dataFrame]
+        """
+
+        dval=pd.read_excel(filename, sheet_name=sheetname, usecols=['Validation Engine', 'serialNumber', 'val start', 'oph@start', 'starts@start'])
+        dval.dropna(inplace=True)
+        dval['n']=dval.index #add column 'n for handling in further methods
+        dval['serialNumber'] = dval['serialNumber'].astype(int).astype(str)
+        print(dval)
+        return dval
 
     @ classmethod
     def load_failures_csv(cls, filename):
