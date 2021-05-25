@@ -898,7 +898,10 @@ class Engine:
         """
         Nominal electrical Power in [kW]
         """
-        return np.around(float(self.get_dataItem('Power_PowerNominal')), decimals=0)
+        try:
+            return np.around(float(self.get_dataItem('Power_PowerNominal')), decimals=0)
+        except:
+            return 0.0
 
     @ property
     def cos_phi(self):
