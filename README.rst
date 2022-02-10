@@ -19,7 +19,7 @@ install miniconda distribution https://conda.io/projects/conda/en/latest/index.h
 
 *inside Anaconda or Miniconda prompt:*
 ::
-  git clone https://github.com/DieterChvatal/dmyplant.git
+  git clone https://github.com/DieterChvatal/dmyplant2.git
 
 *in a Anaconda command window, cd into the dmyplant2 folder and run*
 ::
@@ -32,10 +32,6 @@ to remove these links use*
 
 *Now you can modify and extend the package in place ...*
 
-some users get "int is not callable" errors after installation =>
-please update the "arrow" package to >= 1.0.3:
-::
-  conda update arrow
 
 Usage example
 -------------
