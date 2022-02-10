@@ -159,10 +159,10 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
     for e in vl.engines[:]:
         # print(e.Name, e._d['Engine ID'], e._d['val start'], e._d['oph parts'])
         # complete interval in color fcal
-        y = [e.oph(t) for t in tr]
+        y = [e.oph2(t) for t in tr]
         ax2.plot(dtr, y, linewidth=0.5, color=fcol)
         # the current validation interval in multiple colors
-        n_y = [e.oph(t) for t in n_tr]
+        n_y = [e.oph2(t) for t in n_tr]
         ax2.plot(n_dtr, n_y, label=f"{e.Name} {e._d['Engine ID']}")
 
     # NOW plot some Orientation Lines and Test into the Plot

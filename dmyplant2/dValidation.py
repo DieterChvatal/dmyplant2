@@ -7,7 +7,8 @@ import logging
 from dmyplant2.dEngine import Engine
 from pprint import pprint as pp
 from scipy.stats.distributions import chi2
-
+from tqdm.auto import tqdm
+from IPython.display import HTML, display
 
 class HandleID():
     df = None
@@ -284,12 +285,70 @@ class Validation:
         except:
             raise ValueError(f'Engine {name} not found in Validation Engines')
 
-    def eng_serialNumber(self, serialNumber):
-        """
-        Return the Engines containing Name Validation
-        """
-        try:
-            return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
-        except:
-            raise ValueError(
-                f'Engine SN {serialNumber} not found in Validation Engines')
+    # def eng_serialNumber(self, serialNumber):
+    #     """
+    #     Return the Engines containing Name Validation
+    #     """
+    #     try:
+    #         return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
+    #     except:
+    #         raise ValueError(
+    #             f'Engine SN {serialNumber} not found in Validation Engines')
+
+
+    def quick_report(self):
+
+        from tabulate import tabulate
+
+        # Read Values defined in tdef from Myplant into a pd.dataframe
+        tdef = {161: 'Count_OpHour', 102: 'Power_PowerAct', 1258: 'OperationalCondition', 19074: 'Various_Bits_CollAlarm'}
+        
+        ntable = [[e] + [e['id']] + [e.get_dataItem(v) for v in tdef.values()] for e in self.engines]
+        dft = pd.DataFrame(ntable, columns=['Name','id'] + list(tdef.values()))
+
+        #pp(dft)
+
+        d = self.dashboard
+
+        print(f"{dft.OperationalCondition.count():2.0f} Engines / {d.P.sum()} PU's in Validation Fleet.\n")
+
+        print(f"{dft[((dft.OperationalCondition == 'Running') | (dft.Power_PowerAct > 0))].OperationalCondition.count():2.0f} Validation Engines UP and Running")
+        print(f"{dft[((dft.OperationalCondition != 'Running') & (dft.Power_PowerAct == 0))].OperationalCondition.count():2.0f} Validation Engines not Running:")
+        print(f"{dft[dft.Power_PowerAct.isnull()].OperationalCondition.count():2.0f} Validation Engine(s) with unknown Running Condition:\n")
+
+
+        print(f"{max(d['oph parts']):7.0f} fleet leader oph")
+        #print(f"{np.quantile(d['oph parts'],q=0.75):7.0f} 75% quantile oph")
+        #print(f"{np.median(d['oph parts']):7.0f} median oph")
+        print(f"{np.quantile(d['oph parts'],q=0.5):7.0f} 50% quantile / median oph")
+        #print(f"{np.quantile(d['oph parts'],q=0.25):7.0f} 25% quantile oph")
+
+        print(f"{np.average(d['oph parts']):7.0f} average oph")
+        print(f"{np.average(d['oph parts'].sort_values(ascending=False)[:10]):7.0f} average of top ten oph")
+        print(f"{np.average(d['oph parts'].sort_values(ascending=True)[:10]):7.0f} average of last ten oph\n")
+
+        print(f"{sum(d['oph parts']):7.0f} cumulated oph\n")
+
+        print("\nEngines without contact:")
+
+        display(HTML(dft[((dft.OperationalCondition == 'No Contact') | (dft.OperationalCondition == 'Never Connected'))].to_html(escape=False)))
+        #print(tabulate(dft[((dft.OperationalCondition == 'No Contact') | (dft.OperationalCondition == 'Never Connected'))], headers=dft.columns),"\n")
+
+        print("\nEngines not running:")
+        display(HTML(dft[((dft.OperationalCondition != 'Running') & (dft.Power_PowerAct == 0))].to_html(escape=False)))
+        #print(tabulate(dft[((dft.OperationalCondition != 'Running') & (dft.Power_PowerAct == 0))], headers=dft.columns),"\n")
+
+        print("\nEngines with Alarm FLag != 0 or Tripped condition:")
+        display(HTML(dft[(dft.Various_Bits_CollAlarm == 1) | (dft.OperationalCondition == 'Tripped')].to_html(escape=False)))
+        #print(tabulate(dft[(dft.Various_Bits_CollAlarm == 1) | (dft.OperationalCondition == 'Tripped')], headers=dft.columns),"\n")
+
+        dtripped = dft[(dft.Various_Bits_CollAlarm == 1) | (dft.OperationalCondition == 'Tripped')]
+        # for eng in dtripped.values:
+        #     le = eng[0] 
+        #     print(le)
+        #     dtrips = le.batch_hist_alarms(p_severities=[800], p_offset=0, p_limit=5)
+        #     dtrips['datetime'] = pd.to_datetime(dtrips['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
+        #     print(tabulate(dtrips[['datetime', 'message', 'name','severity']]))
+        #     print()
+        
+        return dtripped

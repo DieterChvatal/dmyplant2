@@ -17,13 +17,19 @@ except:
 
 maxdatapoints = 100000  # Datapoints per request, limited by Myplant
 
+def save_json(fil, d):
+    with open(fil, 'w') as f:
+        json.dump(d, f)
+
+def load_json(fil):
+    with open(fil, "r", encoding='utf-8-sig') as f:
+        return json.load(f)
 
 def epoch_ts(ts) -> float:
     if ts >= 10000000000.0:
         return float(ts/1000.0)
     else:
         return float(ts)
-
 
 def mp_ts(ts) -> int:
     if ts >= 10000000000.0:
@@ -331,3 +337,48 @@ class MyPlant:
         model=model.merge(dataitems_df[dataitems_df.lan=='en'], how='inner', left_on='name', right_on='dataitem')
         model=model.loc[:,['id', 'name', 'unit', 'myPlantName']]
         model.to_csv('data/dataitems.csv', sep=';', index=False)
+
+    def _reshape_asset(self, rec):
+        ret = dict()
+        for key, value in rec.items():
+            if type(value) == list:
+                for lrec in value:
+                    ret[lrec['name']] = lrec['value']
+            else:
+                ret[key] = value
+        return ret
+
+    def fetch_installed_base(self,fields, properties, dataItems, limit = None):
+        url = "/asset/" + \
+            "?fields=" + ','.join(fields) + \
+            "&properties=" + ','.join(properties) + \
+            "&dataItems="  + ','.join(dataItems) + \
+            "&assetTypes=J-Engine"
+        if limit:
+            url = url + f"&limit={limit}"
+        res = self.fetchdata(url)
+        return pd.DataFrame.from_records([self._reshape_asset(a) for a in res['data']])
+
+    def _fetch_installed_base(self):
+        fields = ['serialNumber']
+
+        properties =  [
+            'Design Number','Engine Type','Engine Version','Engine Series','Engine ID',
+            'Control System Type',
+            'Country','IB Site Name','Commissioning Date','IB Unit Commissioning Date','Contract.Warranty Start Date', 'Contract.Warranty End Date','IB Status',
+            'IB NOX', 'IB Frequency', 'IB Item Description Engine'
+            ]
+
+        dataItems = ['OperationalCondition','Module_Vers_HalIO','starts_oph_ratio','startup_counter',
+        'shutdown_counter','Count_OpHour','Power_PowerNominal','Para_Speed_Nominal'
+        ]
+        fleet = self.fetch_installed_base(fields, properties, dataItems, limit = None)
+        fleet.to_pickle('./data/Installed_base.pkl')
+        return fleet
+
+    def get_installed_fleet(self):
+        if os.path.exists('./data/Installed_base.pkl'):
+            fleet = pd.read_pickle('./data/Installed_base.pkl')
+        else:
+            fleet= self._fetch_installed_base()
+        return fleet
