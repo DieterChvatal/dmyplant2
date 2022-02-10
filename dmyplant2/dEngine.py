@@ -3,7 +3,7 @@ import math
 from pprint import pprint as pp
 import pandas as pd
 import numpy as np
-from dmyplant2.dMyplant import epoch_ts, mp_ts
+from dmyplant2.dMyplant import epoch_ts, mp_ts, save_json, load_json
 from dmyplant2.dPlot import datastr_to_dict
 import sys
 import os
@@ -13,7 +13,6 @@ import json
 import arrow
 import warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
-
 
 class MyPlantException(Exception):
     pass
@@ -25,13 +24,6 @@ class Engine:
     for easy MyPlant Access
     """
     
-    _sn = 0
-    _picklefile = ''
-    _properties = {}
-    _dataItems = {}
-    _k = None
-    _P = 0.0
-    _d = {}
     _info = {}
 
     def __init__(self, mp, eng):
@@ -49,10 +41,10 @@ class Engine:
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
         self._eng = eng
+        
         self._sn = str(eng['serialNumber'])
         fname = os.getcwd() + '/data/' + self._sn
         self._picklefile = fname + '.pkl'    # load persitant data
-        # self._lastcontact = fname + '_lastcontact.pkl'
         self._infofile = fname + '.json'
 
         # load info json & lastfetchdate
@@ -73,6 +65,7 @@ class Engine:
                     local_asset = self._mp._asset_data(self._sn)
                     logging.debug(
                         f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
+                    local_asset['validation'] = self._eng
                     self.asset = self._restructure(local_asset)
 
                     # add patch.json values
@@ -103,14 +96,30 @@ class Engine:
             logging.debug(
                 f"Initialize Engine Object, SerialNumber: {self._sn}")
             try:
-                self._d = self._engine_data(eng)
+                self._engine_data(eng)
             except:
                 raise
             self._set_oph_parameter()
             self._save()
 
     def __str__(self):
-        return f"{self._sn} {self._d['Engine ID']} {self.Name[:20] + (self.Name[20:] and ' ..'):23s}"
+        return f"{self['serialNumber']} {self['Engine ID']} {self['Name'][:20] + (self['Name'][20:] and ' ..'):23s}"
+
+    # lookup name in all available myplant datastructures & the valdation definition dict
+    def _get_xxx(self, name):
+        # search in myplant asset structure
+        _keys = ['nokey', 'dataItems', 'properties', 'validation']
+        for _k in _keys:
+            _res = self.get_data(_k, name)
+            if _res:
+                return _res # found => return value & exit function
+        return _res
+
+    def __setitem__(self, key, value):
+        self.asset[key] = value
+
+    def __getitem__(self, key):
+        return self._get_xxx(key)
 
     @property
     def time_since_last_server_contact(self):
@@ -128,26 +137,34 @@ class Engine:
         return {'delta': delta, 'bool': delta > self._mp.caching}
 
     def _restructure(self, local_asset):
-        # restructure downloaded data for easy access
+        # restructure downloaded data for easier data lookup
         # beautiful effective python: dict comprehension :-)
         local_asset['properties'] = {
             p['name']: p for p in local_asset['properties']}
         local_asset['dataItems'] = {
             d['name']: d for d in local_asset['dataItems']}
+        local_asset['validation'] = { 
+            k: {'name': k, 'value' : v} for k,v in local_asset['validation'].items()}
         return local_asset
 
     def _set_oph_parameter(self):
         # for the oph(ts) function
         # this function uses the exect date to calculate
         # the interpolation line
-        self._k = float(self.oph_parts /
-                        (self._lastDataFlowDate - self._valstart_ts))
+        if (self._lastDataFlowDate - self._valstart_ts) == 0:
+            self._k = 0
+        else:
+            self._k = float(self.oph_parts /
+                            (self._lastDataFlowDate - self._valstart_ts))
         # for the oph2(ts) function
         # this function uses the myplant reported hours and the
         # request time to calculate the inperpolation
         # for low validation oph this gives more consistent results
-        self._k2 = float(self.oph_parts /
-                         (arrow.now().timestamp() - self._valstart_ts))
+        if (arrow.now().timestamp() - self._valstart_ts) == 0:
+            self._k = 0
+        else:
+            self._k2 = float(self.oph_parts /
+                            (arrow.now().timestamp() - self._valstart_ts))
 
     def oph(self, ts):
         """Interpolated Operating hours
@@ -160,7 +177,7 @@ class Engine:
 
         doctest:
         >>> e = dmyplant2.Engine(mp, eng)
-        >>> 6160.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 6170.0
+        >>> 6000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 7000.0
         True
         """
         y = self._k * (ts - self._valstart_ts)
@@ -178,60 +195,41 @@ class Engine:
 
         doctest:
         >>> e = dmyplant2.Engine(mp, eng)
-        >>> 6160.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 6170.0
+        >>> 6000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 7000.0
         True
         """
         y = self._k2 * (ts - self._valstart_ts)
         y = y if y > 0.0 else 0.0
         return y
 
-    def _engine_data(self, eng) -> dict:
-        # extract and store important data
-        def calc_values(d) -> dict:
-            oph_parts = float(d['Count_OpHour']) - float(d['oph@start'])
-            d.update({'oph parts': oph_parts})
-            return d
+    def _engine_data(self, eng):
 
-        dd = {}
-        from_asset = {
-            'nokey': ['serialNumber', 'status', 'id', 'model'],
-            'properties': ['Engine Version', 'Engine Type', 'Engine Series', 'IB Unit Commissioning Date', 'Design Number',
-                        'Engine ID', 'IB Control Software', 'IB Item Description Engine', 'IB Project Name'],
-            'dataItems': ['Count_OpHour', 'Count_Start']}
-
-        for key in from_asset:
-            for ditem in from_asset[key]:
-                try:
-                    dd[ditem] = self.get_data(key, ditem)
-                except:
-                    raise
-
-        dd['Name'] = eng['Validation Engine']
-        self.Name = eng['Validation Engine']
-
-        if dd['Engine Type']:
-            dd['P'] = int(str(dd['Engine Type'])[-2:])
-            self._P = dd['P']
+        self._valstart_ts = epoch_ts(arrow.get(self['val start']).timestamp())
+        self._lastDataFlowDate = epoch_ts(self['status'].get(
+                    'lastDataFlowDate', None))
+        self['Name'] = self['Validation Engine']
+        if self['Engine Type']:
+            self['P'] = int(str(self['Engine Type'])[-2:] if str(self['Engine Type'])[-2:].isdigit() else 0)
+            #self._P = int(str(self['Engine Type'])[-2:] if str(self['Engine Type'])[-2:].isdigit() else 0)
         else:
             raise Exception(f'Key "Engine Type" missing in asset of SN {self._sn}\nconsider a patch in patch.json')
 
-        dd['val start'] = eng['val start']
-        dd['oph@start'] = eng['oph@start']
-
-        # add calculated items
-        dd = calc_values(dd)
-        self._valstart_ts = epoch_ts(arrow.get(dd['val start']).timestamp())
-        self._lastDataFlowDate = epoch_ts(dd['status'].get(
-            'lastDataFlowDate', None))
-
-        return dd
+        # for compatibility
+        self.serialNumber = self['serialNumber']
+        self.id = self['id']
+        self['Name'] = self['Validation Engine']
+        self['Name'] = self['Name'] if self['Name'] else self['IB Project Name']
+        self.Name = self['Name']
+        self.val_start = self['val start']
+        self.oph_start = self['oph@start']
+        # for compatibility
 
     def _save(self):
         try:
             self._info['last_fetch_date'] = self._last_fetch_date
-            self._info['Validation Engine'] = self._d['IB Project Name']
+            self._info['Validation Engine'] = self['IB Project Name']
             self._info['val start'] = arrow.get(
-                self._eng['val start']).format('YYYY-MM-DD')
+                self['val start']).format('YYYY-MM-DD')
             with open(self._infofile, 'w') as f:
                 json.dump(self._info, f)
         except FileNotFoundError:
@@ -311,7 +309,7 @@ class Engine:
             return self.get_data('dataItems', item)
         except:
             raise
-        
+
     def historical_dataItem(self, itemId, timestamp):
         """
         Get historical dataItem
@@ -325,7 +323,7 @@ class Engine:
         """
         try:
             res = self._mp.historical_dataItem(
-                self.id, itemId, mp_ts(timestamp)).get('value', None)
+                self['id'], itemId, mp_ts(timestamp)).get('value', None)
         except Exception as e:
             print(e)
             res = None
@@ -341,7 +339,7 @@ class Engine:
         """
         try:
             res = self._mp.history_dataItem(
-                self.id, itemId, mp_ts(p_from), mp_ts(p_to), timeCycle)
+                self['id'], itemId, mp_ts(p_from), mp_ts(p_to), timeCycle)
             df = pd.DataFrame(res)
             df.columns = ['timestamp', str(itemId)]
             return df
@@ -400,6 +398,9 @@ class Engine:
             return ldf, last_p_to
 
         try:
+            # make sure itemids have the format { int: [str,str], int: [str,str], ...}
+            itemIds = { int(k):v for (k,v) in itemIds.items() }
+            
             df = pd.DataFrame([])
             # fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_{slot:02d}.hdf"
             fn = fr"./data/{self._sn}_{timeCycle}_{slot:02d}.hdf"
@@ -408,7 +409,7 @@ class Engine:
             np_to = arrow.get(p_to).shift(seconds=-timeCycle)
             if np_from.to('Europe/Vienna') < np_to.to('Europe/Vienna'):
                 ndf = self._mp.hist_data(
-                    self.id, itemIds, np_from, p_to, timeCycle)
+                    self['id'], itemIds, np_from, p_to, timeCycle)
                 df = df.append(ndf)
                 if debug:
                     print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
@@ -480,7 +481,7 @@ class Engine:
             tincludeMinMax = includeMinMax
             tforceDownSampling = forceDownSampling
 
-            url = r'/asset/' + str(self.id) + \
+            url = r'/asset/' + str(self['id']) + \
                 r'/history/batchdata' + \
                 r'?assetType=' + str(tassetType) + \
                 tt + \
@@ -644,12 +645,12 @@ class Engine:
             dloc.drop(dloc[(dloc['Oil counter power average']%1!=0)].index, inplace=True)
             dloc.drop(dloc[(dloc['Oil counter operational hours delta']%1!=0)].index, inplace=True)
 
+            dloc.drop(dloc[(dloc['Oil counter oil consumption']>5)].index, inplace=True) #Filter very large LOC, e.g. when refilling over the oil counter. Value according to Edward Rogers and Dieter Chvatal
+            dloc.drop(dloc[(dloc['Oil counter oil consumption']<0.005)].index, inplace=True) #Filter very small LOC, according to Dieter Chavatal
 
             hoursum = 0
             volumesum = 0
             energysum = 0
-            powersum = 0
-            count = 0
 
             LOC_ws = []
             LOC_raw = []
@@ -684,6 +685,182 @@ class Engine:
                 raise Exception("Loop Error in Validation_period_LOC")
         return dfres
 
+    def get_OilStatus(self):
+        oilStatus = list()
+        reps = self.get_OilReports_Overview()
+        #####
+        #print()
+        #pp(reps[:1])
+        ####
+        for rep in reps:
+            if len(reps) > 0:
+                loilStatus = rep
+                loilStatus['date'] = arrow.get(rep['dateTaken']).format('DD.MM.YYYY')
+                loilStatus['unitHours_at_sample'] = loilStatus['unitHours'] # move unithours to historic unithours
+                loilStatus['unitHours'] = self['Count_OpHour'] # actual unithours
+
+                loilStatus['oilHours_at_sample'] = loilStatus['oilHours'] # move oilhours to oil sample hours
+                try:
+                    loilStatus['oilHours'] = loilStatus['oilHours_at_sample'] + loilStatus['unitHours'] - loilStatus['unitHours_at_sample'] # recalc actual oil age (?) What if oil is excanged ?
+                except TypeError as err:
+                    print(f"Name: .... {str(err)}")
+                    loilStatus['oilHours'] = loilStatus['oilHours_at_sample']
+                oilStatus.append(loilStatus)
+        return oilStatus
+
+    @ property
+    def get_OilGrade(self):
+        reps = self.get_OilReports_Overview()
+        if len(reps) > 0:
+            oilGrade = reps[0]['oilGrade']
+        else:
+            oilGrade = 'Information not available'
+        return oilGrade
+
+    def get_OilReports_Overview(self):
+        url = r'/asset/' + str(self['id']) + r'/report/Oil'
+        try:
+            try:
+                res = load_json('data/oilreports_raw.json') # for development, avoid frequent downloads
+                print("###### in dengine.getOilReports_Overview => sample Data for Development provided")
+            except FileNotFoundError:
+                res = self._mp.fetchdata(url)
+                save_json('data/oilreports_raw.json', res)
+                print("###### in dengine.getOilReports_Overview => sample Data saved for Development")
+            # Fetch all Oil samples
+            nrl = []
+            for rep in res:
+                rec = dict()
+                rec['datetime'] = None
+                rec['engineSerialNumber'] = rep['sampleMetadata'].get('engineSerialNumber', None)
+                rec['jNumber'] = rep['sampleMetadata'].get('jNumber', None)
+                rec['oilGrade'] = rep['sampleMetadata'].get('oilGrade', None)  
+                rec['oilHours'] = rep['sampleMetadata'].get('oilHours', None)  
+                rec['unitHours'] = rep['sampleMetadata'].get('unitHours', None)  
+                rec['oilCondition'] = rep['sampleMetadata'].get('oilCondition', None)  
+                rec['dateTaken'] =  rep['sampleMetadata'].get('dateTaken', None)
+                rec['sampleId'] =  rep.get('sampleId', None)
+                rec['provider'] =  rep.get('provider', None)
+                nrl.append(rec)
+        except:
+            print(f"No Oil Report available for {self['Name']}")
+            raise
+        #save_json('oilreports.json', nrl)
+        return nrl
+
+    def get_OilReports(self):
+        try:
+            nrl = self.get_OilReports_Overview()
+            for rec in nrl:
+                try:
+                    # fetch analysis details
+                    rec.update(self.get_OilLabReport(rec['provider'], rec['sampleId']))
+                except Exception as err:
+                    print("###### Error:", str(err))
+                    raise
+            # move into a pd.dataframe
+            dfrep = pd.DataFrame(nrl)
+            dfrep['datetime'] = pd.to_datetime(dfrep['dateTaken'] * 1000000.0) #.dt.strftime("%d-%m-%Y")
+            del dfrep['dateTaken']
+            # and return oil data with earliest sample in first row.
+        except:
+            print(f"No Oil Reports available for {self['Name']}")
+            return pd.DataFrame([])
+        #return dfrep
+        return dfrep.iloc[::-1]
+
+    def get_OilLabReport(self, provider, sampleId):
+
+        def get_corr(s, key, default):
+            erg = s.get(key, default)
+            if type(erg) == str:
+                if erg in ['', '-', None]:
+                    return None
+                #if key[-6:] == "-alert":
+                #    return erg
+                if erg[0] == '<':
+                    erg = erg[1:]
+                try:
+                    erg = float(erg)
+                except ValueError as err:
+                    pass #kein float ... einfach als String weitergeben.
+                    #print(f"Returning Value {erg} as String")
+            return erg 
+
+        url = r'/report/sample/Oil/' + sampleId + \
+            r'?provider=' + provider
+        rec = dict()
+        try:
+            try:
+                sample = load_json('data/'+sampleId+'.json')
+                print('.', end='')
+                #print(f"###### in dengine.get_OilLabReport => sample Data for Development provided: {sampleId}")
+            except FileNotFoundError:
+                sample = self._mp.fetchdata(url)
+                #print(f"###### in dengine.get_OilLabReport => sample Data saved for Development: {sampleId}")
+                #save_json('data/'+sampleId+'.json', sample)
+            rec['probe.aluminium'] = get_corr(sample,'probe.aluminium', None)  #'2',
+            rec['probe.aluminium-alert'] = get_corr(sample,'probe.aluminium-alert', None) # 'G',
+            rec['probe.barium'] = get_corr(sample,'probe.barium', None) # '<0.0001',
+            rec['probe.barium-alert'] = get_corr(sample,'probe.barium-alert', None) #  'G',
+            rec['probe.boron'] = get_corr(sample,'probe.boron', None) #  '4',
+            rec['probe.boron-alert'] = get_corr(sample,'probe.boron-alert', None) #  'G',
+            rec['probe.calcium'] = get_corr(sample,'probe.calcium', None) #  '0.2898',
+            rec['probe.calcium-alert'] = get_corr(sample,'probe.calcium-alert', None) #  'G',
+            rec['probe.chlorine'] = get_corr(sample,'probe.chlorine', None) #  '',
+            rec['probe.chlorine-alert'] = get_corr(sample,'probe.chlorine-alert', None) #  'U',
+            rec['probe.chromium'] = get_corr(sample,'probe.chromium', None) #  '<1',
+            rec['probe.chromium-alert'] = get_corr(sample,'probe.chromium-alert', None) #  'G',
+            rec['probe.copper'] = get_corr(sample,'probe.copper', None) #  '<1',
+            rec['probe.copper-alert'] = get_corr(sample,'probe.copper-alert', None) #  'G',
+            rec['probe.glycol'] = get_corr(sample,'probe.glycol', None) #  'NEG',
+            rec['probe.glycol-alert'] = get_corr(sample,'probe.glycol-alert', None) #  'G',
+            rec['probe.insolubles'] = get_corr(sample,'probe.insolubles', None) #  '0.01',
+            rec['probe.insolubles-alert'] = get_corr(sample,'probe.insolubles-alert', None) #  'G',
+            rec['probe.iron'] = get_corr(sample,'probe.iron', None) #  '11',
+            rec['probe.iron-alert'] = get_corr(sample,'probe.iron-alert', None) #  'G',
+            rec['probe.lead'] = get_corr(sample,'probe.lead', None) #  '4',
+            rec['probe.lead-alert'] = get_corr(sample,'probe.lead-alert', None) #  'G',
+            rec['probe.magnesium'] = get_corr(sample,'probe.magnesium', None) #  '0.0009',
+            rec['probe.magnesium-alert'] = get_corr(sample,'probe.magnesium-alert', None) #  'G',
+            rec['probe.molybdenum'] = get_corr(sample,'probe.molybdenum', None) #  '1',
+            rec['probe.molybdenum-alert'] = get_corr(sample,'probe.molybdenum-alert', None) #  'G',
+            rec['probe.nickel'] = get_corr(sample,'probe.nickel', None) #  '<1',
+            rec['probe.nickel-alert'] = get_corr(sample,'probe.nickel-alert', None) #  'G',
+            rec['probe.nitration'] = get_corr(sample,'probe.nitration', None) #  '4',
+            rec['probe.nitration-alert'] = get_corr(sample,'probe.nitration-alert', None) #  'G',
+            rec['probe.oxidation'] = get_corr(sample,'probe.oxidation', None) #  '18',
+            rec['probe.oxidation-alert'] = get_corr(sample,'probe.oxidation-alert', None) #  'G',
+            rec['probe.ph-oil'] = get_corr(sample,'probe.ph-oil', None) #  '5.42',
+            rec['probe.ph-oil-alert'] = get_corr(sample,'probe.ph-oil-alert', None) #  'G',
+            rec['probe.phosphorus'] = get_corr(sample,'probe.phosphorus', None) #  '0.0303',
+            rec['probe.phosphorus-alert'] = get_corr(sample,'probe.phosphorus-alert', None) #  'G',
+            rec['probe.potassium'] = get_corr(sample,'probe.potassium', None) #  '2',
+            rec['probe.potassium-alert'] = get_corr(sample,'probe.potassium-alert', None) #  'G',
+            rec['probe.silicon'] = get_corr(sample,'probe.silicon', None) #  '3',
+            rec['probe.silicon-alert'] = get_corr(sample,'probe.silicon-alert', None) #  'G',
+            rec['probe.sodium'] = get_corr(sample,'probe.sodium', None) #  '8',
+            rec['probe.sodium-alert'] = get_corr(sample,'probe.sodium-alert', None) #  'G',
+            rec['probe.sulphur'] = get_corr(sample,'probe.sulphur', None) #  '',
+            rec['probe.sulphur-alert'] = get_corr(sample,'probe.sulphur-alert', None) #  'U',
+            rec['probe.tan'] = get_corr(sample,'probe.tan', None) #  '2.40',
+            rec['probe.tan-alert'] = get_corr(sample,'probe.tan-alert', None) #  'G',
+            rec['probe.tbn'] = get_corr(sample,'probe.tbn', None) #  '4.3',
+            rec['probe.tbn-alert'] = get_corr(sample,'probe.tbn-alert', None) #  'G',
+            rec['probe.tin'] = get_corr(sample,'probe.tin', None) #  '<1',
+            rec['probe.tin-alert'] = get_corr(sample,'probe.tin-alert', None) #  'G',
+            rec['probe.viscosity-100c'] = get_corr(sample,'probe.viscosity-100c', None) #  '14.4',
+            rec['probe.viscosity-100c-alert'] = get_corr(sample,'probe.viscosity-100c-alert', None) #  'G',
+            rec['probe.viscosity-40c'] = get_corr(sample,'probe.viscosity-40c', None) #  '135',
+            rec['probe.viscosity-40c-alert'] = get_corr(sample,'probe.viscosity-40c-alert', None) #  'G',
+            rec['probe.water'] = get_corr(sample,'probe.water', None) #  '<0.05',
+            rec['probe.water-alert'] = get_corr(sample,'probe.water-alert', None) #  'G',
+            rec['probe.zinc'] = get_corr(sample,'probe.zinc', None) #  '0.0393',
+            rec['probe.zinc-alert'] = get_corr(sample,'probe.zinc-alert', None) #  'G',
+        except: 
+            raise Exception("Failed to fetch Oil sample Data")
+        return rec
+
     def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
         Get pandas dataFrame of Events history, either limit or From & to are required
@@ -711,7 +888,7 @@ class Engine:
 
             tsvj = ','.join([str(s) for s in p_severities])
 
-            url = r'/asset/' + str(self.id) + \
+            url = r'/asset/' + str(self['id']) + \
                 r'/history/alarms' + \
                 r'?severities=' + str(tsvj) + tt
 
@@ -721,37 +898,26 @@ class Engine:
             # import to Pandas DataFrame
             dm = pd.DataFrame(messages)
             # Addtional Datetime column calculated from timestamp
-            dm['datetime'] = pd.to_datetime(
-                dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
+            if not dm.empty:
+                dm['datetime'] = pd.to_datetime(
+                    dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
             return dm
         except:
             raise
-
-    @ property
-    def id(self):
-        """
-        MyPlant Asset id
-
-        e.g.: id = e.id
-        """
-        return self.get_data('nokey', 'id')
-        # return self._d['id']
-
-    @ property
-    def serialNumber(self):
-        """
-        MyPlant serialNumber
-        e.g.: serialNumber = e.serialNumber
-        """
-        return self.get_data('nokey', 'serialNumber')
-        # return self._d['serialNumber']
 
     @ property
     def oph_parts(self):
         """
         Oph since Validation Start
         """
-        return int(self.Count_OpHour - self.oph_start)
+        return int(self['Count_OpHour'] - self['oph@start'])
+    
+    @ property
+    def starts_parts(self):
+        """
+        Starts since Validation Start
+        """
+        return int(self['Count_Starts'] - self['starts@start'])
 
     @ property
     def properties(self):
@@ -770,37 +936,13 @@ class Engine:
         return self.asset['dataItems']
 
     @ property
-    def val_start(self):
-        """
-        Individual Validation Start Date
-        as String
-        """
-        return str(self._eng['val start'])
-        # return self._valstart_ts
-
-    @ property
     def valstart_ts(self):
         """
         Individual Validation Start Date
         as EPOCH timestamp
         e.g.: vs = e.valstart_ts
         """
-        return epoch_ts(self._eng['val start'].timestamp())
-
-    @ property
-    def oph_start(self):
-        """
-        oph at Validation Start
-        as Int
-        """
-        return int(self._eng['oph@start'])
-
-    @ property
-    def Count_OpHour(self):
-        """
-        get current OP Hours
-        """
-        return int(self.get_dataItem('Count_OpHour'))
+        return epoch_ts(arrow.get(self['val start']).timestamp())
 
     ############################
     #Calculated & exposed values
@@ -824,7 +966,7 @@ class Engine:
         """
         bore in [mm]
         """
-        lkey = self.get_property('Engine Series')
+        lkey = self['Engine Series']
         return self._bore(lkey)
 
     @ staticmethod
@@ -845,7 +987,7 @@ class Engine:
         """
         stroke in [mm]
         """
-        lkey = self.get_property('Engine Series')
+        lkey = self['Engine Series']
         return self._stroke(lkey)
 
     @ classmethod
@@ -873,7 +1015,7 @@ class Engine:
         """
         Swept Volume per Cylinder in [l]
         """
-        lkey = self.get_property('Engine Series')
+        lkey = self['Engine Series']
         return self._cylvol(lkey)
 
     @ property
@@ -881,7 +1023,7 @@ class Engine:
         """
         Swept Volume per Engine in [l]
         """
-        lkey = self.get_property('Engine Series')
+        lkey = self['Engine Series']
         if not lkey:
             lkey = '6'
         return self._cylvol(lkey) * self.Cylinders
@@ -891,7 +1033,7 @@ class Engine:
         """
         Number of Cylinders
         """
-        return int(str(self.get_property('Engine Type')[-2:]))
+        return int(str(self['Engine Type'][-2:]))
 
     @ property
     def P_nominal(self):
@@ -899,7 +1041,7 @@ class Engine:
         Nominal electrical Power in [kW]
         """
         try:
-            return np.around(float(self.get_dataItem('Power_PowerNominal')), decimals=0)
+            return np.around(float(self['Power_PowerNominal']), decimals=0)
         except:
             return 0.0
 
@@ -908,7 +1050,7 @@ class Engine:
         """
         cos phi ... current Power Factor[-]
         """
-        return self.get_dataItem('halio_power_fact_cos_phi')
+        return self['halio_power_fact_cos_phi']
 
     @ property
     def Generator_Efficiency(self):
@@ -926,7 +1068,7 @@ class Engine:
             '416': 0.974,
             '420': 0.973
         }
-        lkey = self.get_property('Engine Type')
+        lkey = self['Engine Type']
         return el_eff[lkey] or 0.95
 
     @ property
@@ -948,7 +1090,7 @@ class Engine:
             '6': 1500.0,
             '9': 1000.0
         }
-        lkey = self.get_property('Engine Type')[:1]
+        lkey = self['Engine Type'][:1]
         return speed[lkey]
         # return self.get_dataItem('Para_Speed_Nominal')
 
@@ -956,25 +1098,31 @@ class Engine:
     def BMEP(self):
         return np.around(1200.0 * self.Pmech_nominal / (self.engvol * self.Speed_nominal), decimals=1)
 
+    # @ property
+    # def EPS(self):
+    #     epsilon = {
+            
+    #     }
+
+
     @ property
     def dash(self):
         _dash = dict()
-        _dash['Name'] = self.Name
-        _dash['Engine ID'] = self.get_property('Engine ID')
-        _dash['Design Number'] = self.get_property('Design Number')
-        _dash['Engine Type'] = self.get_property('Engine Type')
-        _dash['Engine Version'] = self.get_property('Engine Version')
+        _dash['Name'] = self['Validation Engine']
+        _dash['Engine ID'] = self['Engine ID']
+        _dash['Design Number'] = self['Design Number']
+        _dash['Engine Type'] = self['Engine Type']
+        _dash['Engine Version'] = self['Engine Version']
         _dash['P'] = self.Cylinders
         _dash['P_nom'] = self.Pmech_nominal
         _dash['BMEP'] = self.BMEP
-        _dash['serialNumber'] = self.serialNumber
-        _dash['id'] = self.id
-        _dash['Count_OpHour'] = self.Count_OpHour
-        _dash['val start'] = pd.to_datetime(self.val_start, format='%Y-%m-%d')
-        _dash['oph@start'] = self.oph_start
+        _dash['serialNumber'] = self['serialNumber']
+        _dash['id'] = self['id']
+        _dash['Count_OpHour'] = self['Count_OpHour']
+        _dash['val start'] = pd.to_datetime(self['val start'], format='%Y-%m-%d')
+        _dash['oph@start'] = self['oph@start']
         _dash['oph parts'] = self.oph_parts
-        _dash['LOC'] = self.get_dataItem(
-            'RMD_ListBuffMAvgOilConsume_OilConsumption')
+        _dash['LOC'] = self['RMD_ListBuffMAvgOilConsume_OilConsumption']
         return _dash
 
 
@@ -1007,7 +1155,7 @@ class Engine_SN(Engine):
                 eng['serialNumber'] = int(sn)
                 # if no 'val start' in json, fake it ...
                 if not 'val start' in eng:
-                    eng['val start'] = '2000-01-01'
+                    eng['val start'] = '1970-01-01'
                 # if no 'n' in json, fake it ...
                 if not 'n' in eng:
                     eng['n'] = 0
@@ -1017,19 +1165,22 @@ class Engine_SN(Engine):
             eng = {
                 'n': 0,
                 'serialNumber': int(sn),
-                'Validation Engine': 'fake Name',
-                'val start': '2000-01-01',
+                'Validation Engine': None,
+                'val start': '1970-01-01',
                 'oph@start': 0
             }
         try:
             super().__init__(mp, eng)
         except:
-            print("Could not create Engine Object")
-            sys.exit(1)
+            #print("Could not create Engine Object")
+            raise
+            #sys.exit(1)
 
         # use Myplant Data to update some fake variables
-        self.Name = self._d['IB Project Name']
-        self._eng['Validation Engine'] = self.Name
+        #pp(self._d)
+        #self.Name = self._d['IB Project Name'] if self._d['IB Project Name'] else self._d['Design Number']
+        #self.Name = self._d['IB Project Name'] if self._d['IB Project Name'] else self.asset['customer']['name']
+        #self._eng['Validation Engine'] = self.Name
 
 if __name__ == "__main__":
 
