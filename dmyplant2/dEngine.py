@@ -932,10 +932,6 @@ class Engine:
 
             # import to Pandas DataFrame
             dm = pd.DataFrame(messages)
-            # Addtional Datetime column calculated from timestamp
-            dm['datetime'] = pd.to_datetime(
-                dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m:%S")
-
             return dm
         except:
             raise
