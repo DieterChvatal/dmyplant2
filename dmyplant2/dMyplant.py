@@ -361,6 +361,11 @@ class MyPlant:
                 ret[key] = value
         return ret
 
+    def fetch_available_data(self):
+        url = "/model/J-Engine"
+        res = self.fetchdata(url)
+        return res
+
     def fetch_installed_base(self,fields, properties, dataItems, limit = None):
         url = "/asset/" + \
             "?fields=" + ','.join(fields) + \
