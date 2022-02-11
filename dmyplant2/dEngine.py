@@ -26,6 +26,24 @@ class Engine:
     
     _info = {}
 
+    @classmethod
+    def from_sn(cls, mp, sn, name=None, valstart = None, oph_start=0, start_start=0 ):
+        f = mp.get_installed_fleet()
+        df = f[f['serialNumber'] == str(sn)]
+        edf = df.to_dict(orient='records')[0]
+        eng = {
+            'n': 0,
+            'Validation Engine': edf['IB Site Name'] if name == None else name,
+            'serialNumber': int(sn),
+            'val start': pd.to_datetime(edf['Commissioning Date']) if valstart == None else pd.to_datetime(valstart),
+            'oph@start': oph_start,
+            'starts@start': start_start,
+            'Asset ID': edf['id'],
+            'Old PU first replaced OPH': None,
+            'Old PUs replaced before upgrade': None
+        }
+        return cls(mp, eng)
+
     def __init__(self, mp, eng):
         """Engine Constructor
 
@@ -34,10 +52,11 @@ class Engine:
             eng (dict): Validation engine input data
 
         Doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072')
         >>> e.serialNumber
         '1320072'
         """
+
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
         self._eng = eng
@@ -121,6 +140,22 @@ class Engine:
     def __getitem__(self, key):
         return self._get_xxx(key)
 
+    # lookup name in all available myplant datastructures & the valdation definition dict
+    def _get_xxx(self, name):
+        # search in myplant asset structure
+        _keys = ['nokey', 'dataItems', 'properties', 'validation']
+        for _k in _keys:
+            _res = self.get_data(_k, name)
+            if _res:
+                return _res # found => return value & exit function
+        return _res
+
+    def __setitem__(self, key, value):
+        self.asset[key] = value
+
+    def __getitem__(self, key):
+        return self._get_xxx(key)
+
     @property
     def time_since_last_server_contact(self):
         """get time since last Server contact
@@ -176,8 +211,8 @@ class Engine:
             float: Operating time rel. to Validation start
 
         doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
-        >>> 6000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 7000.0
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072', name='BMW LANDSHUT 4.10',valstart='07.02.2020', oph_start = 6316)
+        >>> 3000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp())
         True
         """
         y = self._k * (ts - self._valstart_ts)
@@ -194,8 +229,8 @@ class Engine:
             float: Operating time rel. to Validation start
 
         doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
-        >>> 6000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp()) <= 7000.0
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072', name='BMW LANDSHUT 4.10',valstart='07.02.2020', oph_start = 6316)
+        >>> 3000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp())
         True
         """
         y = self._k2 * (ts - self._valstart_ts)
@@ -255,7 +290,7 @@ class Engine:
         e.g.: oph = e.get_data('dataItems','Count_OpHour')
         
         doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072')
         >>> e.get_data('nokey','id')
         117617
         >>> e.get_data('nokey','nothing') == None
@@ -281,7 +316,7 @@ class Engine:
         e.g.: vers = e.get_property("Engine Version")
 
         doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072')
         >>> e.get_property('Engine ID')
         'M4'
         >>> e.get_property('nothing') == None
@@ -299,7 +334,7 @@ class Engine:
         e.g.: vers = e.get_dataItem("Monic_VoltCyl01")
 
         doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072')
         >>> e.get_dataItem('Power_PowerNominal')
         4500.0
         >>> e.get_dataItem('nothing') == None
@@ -317,7 +352,7 @@ class Engine:
         timestamp   int64   Optional,  timestamp in the DataItem history to query for.
 
         doctest:
-        >>> e = dmyplant2.Engine(mp, eng)
+        >>> e = dmyplant2.Engine.from_sn(mp, '1320072')
         >>> e.historical_dataItem(161, arrow.get("2021-03-01 00:00").timestamp())
         12575.0
         """
@@ -898,9 +933,9 @@ class Engine:
             # import to Pandas DataFrame
             dm = pd.DataFrame(messages)
             # Addtional Datetime column calculated from timestamp
-            if not dm.empty:
-                dm['datetime'] = pd.to_datetime(
-                    dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
+            dm['datetime'] = pd.to_datetime(
+                dm['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m:%S")
+
             return dm
         except:
             raise
@@ -1126,88 +1161,12 @@ class Engine:
         return _dash
 
 
-class Engine_SN(Engine):
-    """
-    Engine Object with serialNumber constructor
-    inherited from Engine
-
-    doctest:
-    >>> e = dmyplant2.Engine_SN(mp,'1320072') 
-    >>> print(f"{e._sn}")
-    1320072
-    """
-
-    def __init__(self, mp, sn):
-        """Constructor Init
-
-        Args:
-            mp (dmyplant2.maplant instance): Myplant Access Function Class
-            sn (string): serialNumber
-        """
-        eng = {}
-        fname = os.getcwd() + '/data/' + str(sn)
-        self._infofile = fname + '.json'
-
-        # load info json & lstfetchdate
-        try:
-            with open(self._infofile) as f:
-                eng = json.load(f)
-                eng['serialNumber'] = int(sn)
-                # if no 'val start' in json, fake it ...
-                if not 'val start' in eng:
-                    eng['val start'] = '1970-01-01'
-                # if no 'n' in json, fake it ...
-                if not 'n' in eng:
-                    eng['n'] = 0
-        except FileNotFoundError:
-            # minimal info record to allow myplant
-            # to fetch data for a never conatacted engine
-            eng = {
-                'n': 0,
-                'serialNumber': int(sn),
-                'Validation Engine': None,
-                'val start': '1970-01-01',
-                'oph@start': 0
-            }
-        try:
-            super().__init__(mp, eng)
-        except:
-            #print("Could not create Engine Object")
-            raise
-            #sys.exit(1)
-
-        # use Myplant Data to update some fake variables
-        #pp(self._d)
-        #self.Name = self._d['IB Project Name'] if self._d['IB Project Name'] else self._d['Design Number']
-        #self.Name = self._d['IB Project Name'] if self._d['IB Project Name'] else self.asset['customer']['name']
-        #self._eng['Validation Engine'] = self.Name
-
 if __name__ == "__main__":
 
     import dmyplant2
     import pandas
-    eng = {
-    'n': 16,
-    'Validation Engine': 'BMW LANDSHUT 4.10',
-    'serialNumber': 1320072,
-    'val start': '2020-02-07',
-    'oph@start': 6316,
-    'starts@start': 768.0,
-    'Asset ID': 117617.0,
-    'Old PU first replaced OPH': 1742.0,
-    'Old PUs replaced before upgrade': 4.0
-    }
-
     dmyplant2.cred()
     mp = dmyplant2.MyPlant(0)
-    #vl = dmyplant2.Validation(mp, dval, cui_log=False)
-
     import doctest
     doctest.testmod()
 
-    # >>> eng = {'n': 16, \
-    # 'Validation Engine': 'BMW LANDSHUT 4.10', \
-    # 'serialNumber': 1320072, \
-    # 'val start': '2020-02-07', \
-    # 'oph@start': 6316, \
-    # 'starts@start': 768.0 }

@@ -36,7 +36,6 @@ def epoch_ts(ts) -> float:
     except:
         return 0.0
 
-
 def mp_ts(ts) -> int:
     try:    
         if ts >= 10000000000.0:
@@ -373,4 +372,26 @@ class MyPlant:
         res = self.fetchdata(url)
         return pd.DataFrame.from_records([self._reshape_asset(a) for a in res['data']])
 
+    def _fetch_installed_base(self):
+        fields = ['serialNumber']
 
+        properties =  [
+            'Design Number','Engine Type','Engine Version','Engine Series','Engine ID',
+            'Control System Type',
+            'Country','IB Site Name','Commissioning Date','IB Unit Commissioning Date','Contract.Warranty Start Date', 'Contract.Warranty End Date','IB Status',
+            'IB NOX', 'IB Frequency', 'IB Item Description Engine'
+            ]
+
+        dataItems = ['OperationalCondition','Module_Vers_HalIO','starts_oph_ratio','startup_counter',
+        'shutdown_counter','Count_OpHour','Power_PowerNominal','Para_Speed_Nominal'
+        ]
+        fleet = self.fetch_installed_base(fields, properties, dataItems, limit = None)
+        fleet.to_pickle('./data/Installed_base.pkl')
+        return fleet
+
+    def get_installed_fleet(self):
+        if os.path.exists('./data/Installed_base.pkl'):
+            fleet = pd.read_pickle('./data/Installed_base.pkl')
+        else:
+            fleet= self._fetch_installed_base()
+        return fleet
