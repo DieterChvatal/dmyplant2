@@ -10,8 +10,10 @@ from tqdm.auto import tqdm
 import time
 import pickle
 import pandas as pd
+from pprint import pprint as pp
+
 try:
-    import httplib
+    import httplib # type: ignore comment;
 except:
     import http.client as httplib
 
@@ -26,17 +28,22 @@ def load_json(fil):
         return json.load(f)
 
 def epoch_ts(ts) -> float:
-    if ts >= 10000000000.0:
-        return float(ts/1000.0)
-    else:
-        return float(ts)
+    try:
+        if ts >= 10000000000.0:
+            return float(ts/1000.0)
+        else:
+            return float(ts)
+    except:
+        return 0.0
 
 def mp_ts(ts) -> int:
-    if ts >= 10000000000.0:
-        return int(ts)
-    else:
-        return int(ts * 1000.0)
-
+    try:    
+        if ts >= 10000000000.0:
+            return int(ts)
+        else:
+            return int(ts * 1000.0)
+    except:
+        return 0.0
 
 class MyPlantException(Exception):
     pass
@@ -69,7 +76,7 @@ class MyPlant:
     _session = None
     _caching = 0
 
-    def __init__(self, caching=7200):
+    def __init__(self, caching=0):
         """MyPlant Constructor"""
         if not have_internet():
             raise Exception("Error, Check Internet Connection!")
@@ -106,7 +113,7 @@ class MyPlant:
         Returns:
             dict: CSV dataitems dict
         """
-        data_req = pd.read_csv("DataItems_Request.csv",
+        data_req = pd.read_csv(filename,
                                sep=';', encoding='utf-8')
         dat = {a[0]: [a[1], a[2]] for a in data_req.values}
         return dat
@@ -236,6 +243,8 @@ class MyPlant:
 
     def _history_batchdata(self, id, itemIds, lp_from, lp_to, timeCycle=3600):
         try:
+            # make sure itemids have the format { int: [str,str], int: [str,str], ...}
+            itemIds = { int(k):v for (k,v) in itemIds.items() }
             # comma separated string of DataItemID's
             IDS = ','.join([str(s) for s in itemIds.keys()])
             ldata = self.fetchdata(
@@ -272,7 +281,11 @@ class MyPlant:
 
             # calculate how many full rows per request within the myplant limit are possible
             rows_per_request = maxdatapoints // len(itemIds)
-            rows_total = int(p_to.timestamp() - p_from.timestamp()) // timeCycle
+            try:
+                rows_total = int(p_to.timestamp() - p_from.timestamp()) // timeCycle
+            except:
+                print('Please check arrow version! Make sure you have version 1.0.3 or higher installed!')
+                print('Update arrow by writing in command prompt: pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org arrow==1.0.3')
             pbar = tqdm(total=rows_total)
 
             # initialize loop

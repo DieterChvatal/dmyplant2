@@ -1,5 +1,7 @@
 ﻿from datetime import datetime
 from functools import reduce
+from numpy.lib.arraypad import _pad_dispatcher
+from numpy.testing._private.utils import build_err_msg
 import pandas as pd
 import numpy as np
 import sys
@@ -7,6 +9,9 @@ import logging
 from dmyplant2.dEngine import Engine
 from pprint import pprint as pp
 from scipy.stats.distributions import chi2
+
+import arrow
+from pprint import pprint as pp
 from tqdm.auto import tqdm
 from IPython.display import HTML, display
 
@@ -75,21 +80,31 @@ class Validation:
         engines = self._val.to_dict('records')
         # create and initialise all Engine Instances
         self._engines = []
-        for eng in engines:
+        if not cui_log:
+            pbar = tqdm(total=len(engines))
+            
+        for i, eng in enumerate(engines):
             try:
                 e = lengine(mp, eng)
             except:
                 print("Engine Instances cannot not be created.")
                 sys.exit(1)
             self._engines.append(e)
-            log = f"{eng['n']:02d} {e}"
+            log = f"{i:02d} {e}"
             logging.info(log)
             if cui_log:
                 print(log)
+            else:
+                pbar.update(i)
+
 
         # create dashboard with list comprehension
         ldash = [e.dash for e in self._engines]
         # dashboard as pandas Dataframe
+
+        if not cui_log:
+            pbar.close()
+
         self._dash = pd.DataFrame(ldash)
 
     @ classmethod
@@ -112,8 +127,10 @@ class Validation:
         return dv
 
     @ classmethod
-    def load_def_excel(cls, filename, sheetname):
+    def load_def_excel(cls, filename, sheetname, mp=None):
         """load CSV Validation definition file 
+        oph@start and starts@start can be automatically calculated based on val start if no information provided
+        (Data is taken from the end of the startday from the validation)
 
         example content:
         n;Validation Engine;serialNumber;val start;oph@start;starts@start;Asset ID;Old PU first replaced OPH;Old PUs replaced before upgrade
@@ -123,16 +140,30 @@ class Validation:
         Args:
             filename ([string]): [Filename of definition file] must include .xslx at the end
             sheetname ([string]): Relevant sheetname in file
+            mp (myPlant Objekt): Optional myplant object to enable auto filling of missing values
 
         Returns:
             [pd.dataFrame]: [Validation definition as dataFrame]
         """
 
         dval=pd.read_excel(filename, sheet_name=sheetname, usecols=['Validation Engine', 'serialNumber', 'val start', 'oph@start', 'starts@start'])
-        dval.dropna(inplace=True)
+        dval.dropna(subset=['Validation Engine', 'serialNumber', 'val start'], inplace=True)
         dval['n']=dval.index #add column 'n for handling in further methods
         dval['serialNumber'] = dval['serialNumber'].astype(int).astype(str)
-        print(dval)
+        if mp!=None:
+            for i in range(len(dval)):
+                if np.isnan(dval['oph@start'].iloc[i]) or np.isnan(dval['starts@start'].iloc[i]): #check for missing values
+                    asset = mp._asset_data(dval['serialNumber'].iloc[i]) #get assetId from Serial Number
+                    assetId=asset['properties'][0]['assetId']
+                    itemIds={161: ['CountOph', 'h'], 179: ['Starts', '']}
+                    p_from=arrow.get(dval['val start'].iloc[i])
+                    p_to=p_from.shift(days=1)
+                    add_data=mp.hist_data(assetId, itemIds, p_from, p_to, timeCycle=3600)
+                    if add_data.empty:
+                        raise ValueError('Error! No setup data available for engine '+dval['Validation Engine'].iloc[i]+' for specified val start. Please change the val start date or insert the oph@start and starts@start manually in the excel file and run the program again.')
+                    if np.isnan(dval['oph@start'].iloc[i]): dval['oph@start'].iloc[i]=add_data['CountOph'].iloc[-1]
+                    if np.isnan(dval['starts@start'].iloc[i]): dval['starts@start'].iloc[i]=add_data['Starts'].iloc[-1]
+            
         return dval
 
     @ classmethod
@@ -284,6 +315,7 @@ class Validation:
             return [e for e in self._engines if name in e.Name]
         except:
             raise ValueError(f'Engine {name} not found in Validation Engines')
+
 
     # def eng_serialNumber(self, serialNumber):
     #     """

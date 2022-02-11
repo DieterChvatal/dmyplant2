@@ -25,8 +25,8 @@ from bokeh.io import push_notebook, show, output_notebook
 from bokeh.plotting import figure, output_file, show
 from bokeh.models import LinearAxis, Range1d, DataRange1d, HoverTool
 from bokeh.core.validation import check_integrity
-from bokeh.layouts import column, row, gridplot
-from bokeh.models import ColumnDataSource
+from bokeh.layouts import column, row, gridplot, layout
+from bokeh.models import ColumnDataSource, Div
 
 # Load Application imports
 from dmyplant2.dReliability import demonstrated_reliability_sr
@@ -157,13 +157,13 @@ def demonstrated_Reliabillity_Plot(vl, beta=1.21, T=30000, s=1000, ft=pd.DataFra
 
     # and plot the linearized engine runtime lines vs the 2nd axis
     for e in vl.engines[:]:
-        # print(e.Name, e._d['Engine ID'], e._d['val start'], e._d['oph parts'])
+        # print(e.Name, e['Engine ID'], e['val start'], e['oph parts'])
         # complete interval in color fcal
         y = [e.oph2(t) for t in tr]
         ax2.plot(dtr, y, linewidth=0.5, color=fcol)
         # the current validation interval in multiple colors
         n_y = [e.oph2(t) for t in n_tr]
-        ax2.plot(n_dtr, n_y, label=f"{e.Name} {e._d['Engine ID']}")
+        ax2.plot(n_dtr, n_y, label=f"{e.Name} {e['Engine ID']}")
 
     # NOW plot some Orientation Lines and Test into the Plot
 
@@ -344,6 +344,144 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True
     if legend:
         axes[0].legend(lns, labs, loc=0)
 
+
+def scatter_chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True, *args, **kwargs):
+    """Generate Diane like chart with multiple axes
+
+    example:
+    .....
+
+    dat = {
+        161: ['CountOph','h'],
+        102: ['PowerAct','kW'],
+        107: ['Various_Values_SpeedAct','U/min'],
+        217: ['Hyd_PressCrankCase','mbar'],
+        16546: ['Hyd_PressOilDif','bar']
+    }
+
+    df = mp.hist_data(
+        e.id,
+        itemIds=dat,
+        p_from=arrow.get('2021-03-05 05:28').to('Europe/Vienna'),
+        p_to=arrow.get('2021-03-05 05:30').to('Europe/Vienna'),
+        timeCycle=1)
+
+
+    dmyplant2.chart(df, [
+    {'col': ['PowerAct'],'ylim': [0, 5000]},
+    {'col': ['Various_Values_SpeedAct'],'ylim': [0, 2500], 'color':'darkblue'},
+    {'col': ['CountOph'],'ylim': [0, 500]},
+    {'col': ['Hyd_PressCrankCase'],'ylim': [-40, 60]},
+    {'col': ['Hyd_PressOilDif'],'ylim': [0, 1]}
+    ],
+    title = e,
+    grid = False,
+    figsize = (14,10))
+
+    .....
+
+    Args:
+        d (pd.dataFrame): Data , e.g downloaded by engine.batch_hist_dataItems(...)
+        ys ([list of dicts]): the DataFrame d columns to plot
+        x (str, optional): x-axis column as string. Defaults to 'datetime'.
+        title (str, optional): Main Title of figure. Defaults to None.
+        grid (bool, optional): displaygrid on left axis. Defaults to True.
+        legend (bool, optional): legend. Defaults to True.
+    """
+    # for entry in kwargs.items():
+    #     print("Key: {}, value: {}".format(entry[0], entry[1]))
+
+    fig, ax = plt.subplots(*args, **kwargs)
+
+    axes = [ax]
+    ax.tick_params(axis='x', labelrotation=30)
+
+    if grid:
+        ax.grid()
+    if title:
+        ax.set_title(title)
+
+    for y in ys[1:]:
+        # Twin the x-axis twice to make independent y-axes.
+        axes.append(ax.twinx())
+
+    fig.subplots_adjust(top=0.9)
+    fig.subplots_adjust(left=0.1)
+
+    extra_ys = len(axes[2:])
+
+    # Make some space on the right side for the extra y-axes.
+    if extra_ys > 0:
+        if extra_ys > 6:
+            print('you are being ridiculous')
+            raise ValueError('too many Extra Axes')
+        else:
+            temp = 0.9 - extra_ys * 0.05
+
+        # print('you are being ridiculous')
+        fig.subplots_adjust(right=temp)
+        right_additive = 0.065 / temp
+
+        # Move the last y-axis spine over to the right by x% of the width of the axes
+        for i, ax in enumerate(axes[2:]):
+            ax.spines['right'].set_position(
+                ('axes', 1.0 + right_additive * (i+1)))
+            ax.set_frame_on(True)
+            ax.patch.set_visible(False)
+            ax.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+        # To make the border of the right-most axis visible, we need to turn the frame
+        # on. This hides the other plots, however, so we need to turn its fill off.
+
+    cols = []
+    lines = []
+    # line_styles = cycle(['-', '-', '-', '--', '-.', ':', 'dotted', ',', 'o', 'v', '^', '<', '>',
+    #                     '1', '2', '3', '4', 's', 'p', '*', 'h', 'H', '+', 'x', 'D', 'd', '|', '_'])
+    line_styles = cycle(['-', '-', '-', '--', '-.', ':'])
+
+    colors = cycle(matplotlib.rcParams['axes.prop_cycle'])
+    for ax, y in zip(axes, ys):
+        ls = next(cycle(line_styles))
+        if len(y['col']) == 1:
+            col = y['col'][0]
+            cols.append(col)
+            if 'color' in y:
+                color = y['color']
+            else:
+                color = next(cycle(colors))['color']
+            lines.append(
+                #ax.plot(d[x], d[col],
+                #                 linestyle=ls, label=col, color=color))
+                ax.scatter(d[x], d[col], label=col, color=color))
+            ax.set_ylabel(col, color=color)
+            if 'ylim' in y:
+                ax.set_ylim(y['ylim'])
+            ax.tick_params(axis='y', colors=color)
+            ax.spines['right'].set_color(color)
+        else:
+            for col in y['col']:
+                if 'color' in y:
+                    color = y['color']
+                else:
+                    color = next(cycle(colors))['color']
+                lines.append(
+                    #ax.plot(d[x], d[col], linestyle=ls, label=col, color=color))
+                    ax.scatter(d[x], d[col], label=col, color=color))
+                cols.append(col)
+            llabel = ', '.join(y['col'])
+            if len(llabel) > 90:
+                llabel = llabel[:87] + ' ..'
+            ax.set_ylabel(llabel)
+            if 'ylim' in y:
+                ax.set_ylim(y['ylim'])
+            ax.tick_params(axis='y')
+    axes[0].set_xlabel(d.index.name)
+    #lns = lines[0]
+    #for l in lines[1:]:
+    #    lns = lns + l
+    #labs = [l.get_label() for l in lns]
+    #if legend:
+    #    axes[0].legend(lns, labs, loc=0)
+
 def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(10,7), *args, **kwargs):
     """wrapper function for bokeh_chart from Johannes""" 
     if notebook: output_notebook(hide_banner=True)
@@ -455,6 +593,8 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
         if pd.Series(x_ax).isin(dataitems.myPlantName).any():
             x_unit=dataitems.loc[dataitems.myPlantName==x_ax].iat[0,2]
             if x_unit is np.nan: x_unit=''
+        elif x_ax=='Operating hours validation':
+            x_unit='h'
         else:
             x_unit=''
 
@@ -484,7 +624,10 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
         p.grid.grid_line_color = None
         
     p.yaxis.visible = False
-    tooltips = []
+    if x_ax=='datetime':
+        tooltips = [('Datetime', '@'+x_ax+'{%F %T}')]
+    else:
+        tooltips = [(x_ax, '@{'+x_ax +'}{0.1 f} '+x_unit)]
     for i, y in enumerate(pltcfg):
         to_remove=[]
         for col in y['col']: #checks if data is available
@@ -546,8 +689,9 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
         p.add_layout(LinearAxis(y_range_name=str(i),
                             axis_label=llabel, axis_label_text_color=color), 'left')
 
-    p.add_tools(HoverTool(tooltips=tooltips,
-                           mode='mouse'))  # mode=vline -> display a tooltip whenever the cursor is vertically in line with a glyph
+    p.add_tools(HoverTool(tooltips=tooltips, 
+                        formatters={f'@datetime': 'datetime'}, # use 'datetime' formatter for '@date' field    
+                        mode='mouse'))  # mode=vline -> display a tooltip whenever the cursor is vertically in line with a glyph
     p.toolbar.active_scroll = p.select_one('WheelZoomTool')
 
     p.legend.click_policy='hide' #hides graph when you click on legend, other option mute (makes them less visible)
@@ -610,6 +754,8 @@ def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='dat
         if pd.Series(x_ax).isin(dataitems.myPlantName).any():
             x_unit=dataitems.loc[dataitems.myPlantName==x_ax].iat[0,2]
             if x_unit is np.nan: x_unit=''
+        elif x_ax=='Operating hours validation':
+            x_unit='h'
         else:
             x_unit=''
 
@@ -667,7 +813,6 @@ def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='dat
 
         for col in y['col']:
             eng_name=col.split('_@_')[0]
-            print(variable)
             if not pd.Series(variable).isin(dataitems.myPlantName).any(): #Additional if for handling new data rows generated by function, else is normal behaviour
                 if 'unit' in y:
                     unit.append(y['unit'])
@@ -684,8 +829,12 @@ def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='dat
                 color = next(cycle(colors))['color']
 
             func = getattr(p, style) #to choose between different plotting styles
-            renderers.append(func(source=source, x=x_ax, y=col, #circle or line
+            if style=='circle':
+                renderers.append(func(source=source, x=x_ax, y=col, #circle or line
             color=color, y_range_name=str(i), legend_label=eng_name, line_width=linewidth, size=2))
+            else:
+                renderers.append(func(source=source, x=x_ax, y=col, #circle or line
+            color=color, y_range_name=str(i), legend_label=eng_name, line_width=linewidth))        
             p.add_tools(HoverTool(tooltips=[(eng_name, '@{'+col +'}{0.2 f} '+unit[-1])], renderers=[renderers[-1]],toggleable=False))
 
         if not y.get('ylim'):  #only if y-limits not specified
@@ -779,14 +928,20 @@ def expand_cylinder (y, rel_cyl=all, engi=0):
         else:
             rel_cyl=list(range(1, 25))
 
+    add_cyl_short_num=['Inlet valve closure noise', 'Outlet valve closure noise']
     add_cyl_num=['Exhaust temperature','Exhaust temperature delta', 'Ignition voltage', 'ITP','Knock integrator','Knock noise', #'Exhaust temperature delta' added for delta to mean value
     'Pressure 49° before TDC', 'Mechanical noise', 'Cylinder state', 'Close current gradient',
-    'Inlet valve closure noise', 'Inlet valve closure timing', 'Outlet valve closure noise', 'Outlet valve closure timing']
+     'Inlet valve closure timing', 'Outlet valve closure timing']
     add_num=['Knock signal','P-max','AI','IMEP','Duration of opening','Conrod bearing temperature','CQ max','CQ','Slow down time']
     add_mid=[]#talk with Sebastian what is looked at analyzis
 
     to_remove=[]
     for col in y['col']:
+        if col in add_cyl_short_num and not col in to_remove:
+            for cyl in rel_cyl:
+                y['col'].append(f'{col} cyl. {cyl}')
+                to_remove.append (col)
+
         if col in add_cyl_num and not col in to_remove:
             for cyl in rel_cyl:
                 y['col'].append(f'{col} cyl. {cyl:02d}')
@@ -821,9 +976,10 @@ def shrink_cylinder (y, rel_cyl=list(range(1, 25))):
     """
 
     rel_cyl=[str(cyl).zfill(2) for cyl in rel_cyl]
-    add_cyl_num=['Exhaust temperature','Exhaust temperature delta', 'Ignition voltage', 'ITP','Knock integrator','Knock noise', 
+    add_cyl_short_num=['Inlet valve closure noise', 'Outlet valve closure noise']
+    add_cyl_num=['Exhaust temperature','Exhaust temperature delta', 'Ignition voltage', 'ITP','Knock integrator','Knock noise', #'Exhaust temperature delta' added for delta to mean value
     'Pressure 49° before TDC', 'Mechanical noise', 'Cylinder state', 'Close current gradient',
-    'Inlet valve closure noise', 'Inlet valve closure timing', 'Outlet valve closure noise', 'Outlet valve closure timing']
+     'Inlet valve closure timing', 'Outlet valve closure timing']
     add_num=['Knock signal','P-max','AI','IMEP','Duration of opening','Conrod bearing temperature','CQ max','CQ','Slow down time']
     add_mid=[]#talk with Sebastian what is looked at analyzis
     to_check=add_cyl_num+add_num+add_mid
@@ -831,6 +987,7 @@ def shrink_cylinder (y, rel_cyl=list(range(1, 25))):
     to_remove=[]
     for col in y['col']:
         if (any(ele in col for ele in to_check) and not col[-2:] in rel_cyl): #check if elemt in expanded elements and not in rel_cyl
+            #bug with add_cyl_short_num, exception would need to be added
             to_remove.append (col)
 
     y['col']=[i for i in y['col'] if not i in to_remove ] #remove original column
@@ -871,9 +1028,9 @@ def load_pltcfg_from_excel ():
                 plt_titles.append('')
 
         if df_cfg.Axis_Nr.iloc[i]!=0:
-            if df_cfg.a_equal.iloc[i]==False:
+            if df_cfg.a_equal.iloc[i]==False or df_cfg.p_equal.iloc[i]==False:
                 pltcfg[-1].append(dict()) #new axis
-        
+
             y=pltcfg[-1][-1]
             if type(df_cfg.Name.iloc[i])==str:
                 if 'col' in y:
@@ -888,6 +1045,131 @@ def load_pltcfg_from_excel ():
                 if 'ylim' not in y and is_number(lim_min) and is_number(lim_max):
                     y['ylim']=(lim_min, lim_max) #add tuple y lim
     return pltcfg, plt_titles
+
+def show_val_stats (vl, df_loadrange=None, df_starts_oph=None):
+    """
+    Calculates
+    Sort out some cylinder specific parameters, so that only the ones interested in are displayed
+    The rest is loaded beforehand for shorter overall loading time
+
+    Args:
+        vl (dmyplant2.Validation): Validation Objekt
+        df_loadrange (pd.DataFrame) (optional): Dataframe with load information 
+        df_starts_oph (pd-DatFrame) (optional): DataFrame with information about oph per start
+
+    Returns:
+        text_lay (bokeh.models.layouts.Column): Bokeh Column, can be displayed directly with show() or used further in a sheet or tab
+
+    example:
+    .....
+    """
+    from bokeh.models.widgets import DataTable, DateFormatter, TableColumn
+    elements=[]
+    #### loadrange
+    if not df_loadrange.empty:
+        loadrange_info=Div(text="<h3>Power load (P/Pnom)</h3>(Valid for displayed data)")
+
+        df_loadrange=df_loadrange*100
+        for col in df_loadrange.columns: df_loadrange[col]=df_loadrange[col].map("{:,.1f}%".format)
+        df_loadrange.insert(0, 'Engine', df_loadrange.index)
+        Columns = [TableColumn(field=Ci, title=Ci) for Ci in df_loadrange.columns] # bokeh columns
+        loadrange = DataTable(columns=Columns, source=ColumnDataSource(df_loadrange), autosize_mode='fit_columns', height=30*(len(df_loadrange.index)+1), index_position=None) # bokeh table
+        elements+=[loadrange_info, loadrange]#, loadrange_info2]
+
+    #### starts_oph
+    if not df_starts_oph.empty:
+        starts_oph_info=Div(text="<h3>OPH and Starts</h3>(Valid for displayed data)")
+
+        df_starts_oph['OPH']=df_starts_oph['OPH'].map("{:,.1f}".format)
+        df_starts_oph['OPH/ Start']=df_starts_oph['OPH/ Start'].map("{:,.1f}".format) 
+        df_starts_oph.insert(0, 'Engine', df_starts_oph.index)
+        Columns = [TableColumn(field=Ci, title=Ci) for Ci in df_starts_oph.columns] # bokeh columns
+        starts_oph = DataTable(columns=Columns, source=ColumnDataSource(df_starts_oph), autosize_mode='fit_columns', height=30*(len(df_starts_oph.index)+1), index_position=None) # bokeh table
+        elements+=[starts_oph_info, starts_oph]#, starts_oph_info2]
+
+    d=vl.dashboard
+    # Read Values defined in tdef from Myplant into a pd.dataframe
+    tdef = {161: 'Count_OpHour', 102: 'Power_PowerAct', 1258: 'OperationalCondition', 19074: 'Various_Bits_CollAlarm'}
+    ntable = [[e] + [e.get_dataItem(v) for v in tdef.values()] for e in vl.engines]
+    dft = pd.DataFrame(ntable, columns=['Name'] + list(tdef.values()))
+
+    info_text=Div(text="<style>h3, h4{ margin: 0;}</style>"+
+    f"<h3>{dft.OperationalCondition.count()} Engines in Validation Fleet:</h3>"+
+    f"{dft[((dft.OperationalCondition == 'Running') | (dft.Power_PowerAct > 0))].OperationalCondition.count()} Validation Engines UP and Running<br>"+ 
+    f"{dft[((dft.OperationalCondition != 'Running') & (dft.Power_PowerAct == 0))].OperationalCondition.count()} Validation Engines not Running")
+
+    #Display OPH characteristics
+    oph_info_tit=Div(text="<h3>Validation progress</h3>")
+    df_oph=pd.DataFrame(columns=['Characteristic','OPH'])
+    df_oph=df_oph.append({'Characteristic':'Fleet leader', 'OPH': f"{max(d['OPH Validation']):.0f}"}, ignore_index=True)
+    #df_oph=df_oph.append({'Characteristic':'75% quantile', 'OPH': f"{np.quantile(d['oph parts'],q=0.75):.0f}"}, ignore_index=True)
+    #df_oph=df_oph.append({'Characteristic':'Median', 'OPH': f"{np.median(d['oph parts']):.0f}"}, ignore_index=True)
+    #df_oph=df_oph.append({'Characteristic':'50% quantile', 'OPH': f"{np.quantile(d['oph parts'],q=0.5):.0f}"}, ignore_index=True)
+    #df_oph=df_oph.append({'Characteristic':'25% quantile', 'OPH': f"{np.quantile(d['oph parts'],q=0.25):.0f}"}, ignore_index=True)
+    df_oph=df_oph.append({'Characteristic':'Average', 'OPH': f"{np.average(d['OPH Validation']):.0f}"}, ignore_index=True)
+    df_oph=df_oph.append({'Characteristic':'Cumulated', 'OPH': f"{sum(d['OPH Validation']):.0f}"}, ignore_index=True)
+
+    Columns = [TableColumn(field=Ci, title=Ci) for Ci in df_oph.columns] # bokeh columns
+    oph_info = DataTable(columns=Columns, source=ColumnDataSource(df_oph), autosize_mode='fit_columns', height=30*(len(df_oph.index)+1),index_position=None) # bokeh table
+
+    #Displayengines with certain states
+    spec_eng=Div(text="<h3>Engines with special states:</h3>")
+    tit_run=Div(text="<h4>Engines not running:</h4>")
+    dfd=dft[((dft.OperationalCondition != 'Running') & (dft.Power_PowerAct == 0))]
+    if dfd.empty:
+        table_run=Div(text="<em>All engines running</em>")
+    else:
+        dfd['Name'] = dfd.apply(lambda row : row[0]._info.get('Validation Engine'), axis=1)
+        Columns2 = [TableColumn(field=Ci, title=Ci) for Ci in dfd.columns] # bokeh columns
+        table_run = DataTable(columns=Columns2, source=ColumnDataSource(dfd), autosize_mode='fit_columns', height=30*(len(dfd.index)+1)) # bokeh table
+
+    tit_con=Div(text="<h4>Engines without contact:</h4>")
+    dfc=dft[((dft.OperationalCondition == 'No Contact') | (dft.OperationalCondition == 'Never Connected'))]
+   
+    if dfc.empty:
+        table_con=Div(text="<em>All engines in contact</em>")
+    else:
+        dfc['Name'] = dfc.apply(lambda row : row[0]._info.get('Validation Engine'), axis=1)
+        Columns = [TableColumn(field=Ci, title=Ci) for Ci in dfc.columns] # bokeh columns
+        table_con = DataTable(columns=Columns, source=ColumnDataSource(dfc), autosize_mode='fit_columns', height=30*(len(dfc.index)+1)) # bokeh table
+
+    tit_alarm=Div(text="<h4>Engines with Alarm Flag not 0:</h4>")
+    dfe=dft[dft.Various_Bits_CollAlarm != 0]
+    if dfe.empty:
+        table_alarm=Div(text="<em>No engines with alarms</em>")
+    else:
+        dfe['Name'] = dfe.apply(lambda row : row[0]._info.get('Validation Engine'), axis=1)
+        Columns3 = [TableColumn(field=Ci, title=Ci) for Ci in dfe.columns] # bokeh columns
+        table_alarm = DataTable(columns=Columns3, source=ColumnDataSource(dfe), autosize_mode='fit_columns', height=30*(len(dfe.index)+1)) # bokeh table
+
+    #Display trips
+    trip_div=[Div(text="<h3>Recent alarms of engines with alarm:</h3>")]
+    dtripped = dft[dft.Various_Bits_CollAlarm == 1]
+    for eng in dtripped.values:
+        le = eng[0] 
+        trip_div.append(Div(text='<h4>'+le._info.get('Validation Engine')+'</h4>'))
+        dtrips = le.batch_hist_alarms(p_severities=[800], p_offset=0, p_limit=5)
+        dtrips['datetime'] = pd.to_datetime(dtrips['timestamp'] * 1000000.0).dt.strftime("%m-%d-%Y %H:%m")
+        df_print=dtrips[['datetime', 'message', 'name','severity']]
+        Columns = [TableColumn(field=Ci, title=Ci) for Ci in df_print.columns] # bokeh columns
+        trip_div.append(DataTable(columns=Columns, source=ColumnDataSource(df_print), autosize_mode='fit_columns', height=30*(len(df_print.index)+1))) # bokeh table
+
+    #Create bar for figure call
+    bar_source=ColumnDataSource({'Validation Engines UP and Running': [(dft[((dft.OperationalCondition == 'Running') | (dft.Power_PowerAct > 0))].OperationalCondition.count())], 'Validation Engines not Running': [(dft[((dft.OperationalCondition != 'Running') & (dft.Power_PowerAct == 0))].OperationalCondition.count())]})
+
+    p = figure(plot_width=500,plot_height=50, tools="hover", tooltips="$name: @$name", toolbar_location=None)
+    p.axis.visible = False
+    p.xgrid.visible = False
+    p.ygrid.visible = False
+    p.x_range.range_padding = 0
+    p.y_range.range_padding = 0
+    p.hbar_stack(['Validation Engines UP and Running', 'Validation Engines not Running'], y=10, width=0.9, color=['green', 'grey'], source=bar_source)
+
+    access_time=Div(text='<small>Access time: '+datetime.now().strftime('%d.%m.%y %H:%M')+'</small>')
+
+    elements=elements+[info_text, p, access_time, oph_info_tit, oph_info, spec_eng, tit_run, table_run, tit_con, table_con, tit_alarm, table_alarm, [trip_div]]
+    text_lay=layout(children=elements)
+    return text_lay
 
 
 if __name__ == '__main__':

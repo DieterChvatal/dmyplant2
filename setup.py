@@ -33,7 +33,10 @@ SETUP_ARGS = dict(
         'matplotlib>=3.2.2',
         'numpy>=1.18.5',
         'pandas>=1.0.5',
-        'scipy>=1.5.2'
+        'scipy>=1.5.2',
+        'tqdm>=4.62.3',
+        'bokeh>=2.4.2',
+        'Ipython>=8.0.1'
     ],
 )
 
