@@ -1,4 +1,5 @@
 ﻿from datetime import datetime, timedelta
+from email import message
 import math
 from pprint import pprint as pp
 import pandas as pd
@@ -27,10 +28,17 @@ class Engine:
     _info = {}
 
     @classmethod
-    def from_sn(cls, mp, sn, name=None, valstart = None, oph_start=0, start_start=0 ):
+    def lookup_Installed_Fleet(cls, mp, sn):
         f = mp.get_installed_fleet()
         df = f[f['serialNumber'] == str(sn)]
-        edf = df.to_dict(orient='records')[0]
+        return df.to_dict(orient='records')[0]
+
+    @classmethod
+    def from_sn(cls, mp, sn, name=None, valstart = None, oph_start=0, start_start=0 ):
+        # f = mp.get_installed_fleet()
+        # df = f[f['serialNumber'] == str(sn)]
+        # edf = df.to_dict(orient='records')[0]
+        edf = cls.lookup_Installed_Fleet(mp, sn)
         eng = {
             'n': 0,
             'Validation Engine': edf['IB Site Name'] if name == None else name,
@@ -60,8 +68,8 @@ class Engine:
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
         self._eng = eng
-        
         self._sn = str(eng['serialNumber'])
+        
         fname = os.getcwd() + '/data/' + self._sn
         self._picklefile = fname + '.pkl'    # load persitant data
         self._infofile = fname + '.json'
@@ -79,7 +87,10 @@ class Engine:
             self._info = {**self._info, **self._eng}
         try:
             # fetch data from Myplant only on conditions below
-            if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
+            #if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
+            cachexpired = self._cache_expired()['bool']
+            checkpickle = self._check_for_pickling_error()
+            if cachexpired or not checkpickle:
                 try:
                     local_asset = self._mp._asset_data(self._sn)
                     logging.debug(
@@ -103,8 +114,9 @@ class Engine:
                 except: 
                     raise
             else:
-                with open(self._picklefile, 'rb') as handle:
-                    self.__dict__ = pickle.load(handle)
+                self.__dict__ = self.ldata
+                # with open(self._picklefile, 'rb') as handle:
+                #     self.__dict__ = pickle.load(handle)
         except FileNotFoundError:
             logging.debug(
                 f"{self._picklefile} not found, fetch Data from MyPlant Server")
@@ -115,30 +127,29 @@ class Engine:
             logging.debug(
                 f"Initialize Engine Object, SerialNumber: {self._sn}")
             try:
+                for k,v in self.lookup_Installed_Fleet(self._mp,self._sn).items():
+                    self[k] = v
                 self._engine_data(eng)
             except:
                 raise
             self._set_oph_parameter()
             self._save()
 
+    def _check_for_pickling_error(self):
+        if os.path.exists(self._picklefile):
+            try:
+                with open(self._picklefile, 'rb') as handle:
+                    self.ldata = pickle.load(handle)
+                    return True
+            #except pickle.PicklingError as err:
+            except Exception:
+                self.ldata = None
+                return False
+        else:
+            return False
+
     def __str__(self):
         return f"{self['serialNumber']} {self['Engine ID']} {self['Name'][:20] + (self['Name'][20:] and ' ..'):23s}"
-
-    # lookup name in all available myplant datastructures & the valdation definition dict
-    def _get_xxx(self, name):
-        # search in myplant asset structure
-        _keys = ['nokey', 'dataItems', 'properties', 'validation']
-        for _k in _keys:
-            _res = self.get_data(_k, name)
-            if _res:
-                return _res # found => return value & exit function
-        return _res
-
-    def __setitem__(self, key, value):
-        self.asset[key] = value
-
-    def __getitem__(self, key):
-        return self._get_xxx(key)
 
     # lookup name in all available myplant datastructures & the valdation definition dict
     def _get_xxx(self, name):
@@ -896,6 +907,45 @@ class Engine:
             raise Exception("Failed to fetch Oil sample Data")
         return rec
 
+
+    def get_messages(self, p_from=None, p_to=None):
+        # messages consist of the following severities
+        sev = [600,650,700,800]
+        # download all available data at the first request and store
+        # to the engine specific pickle file.
+        # check if there is a pickle file, messages are stored as dataframes
+        pfn = f"./data/{str(self._sn)}_messages.pkl"
+        if os.path.exists(pfn):
+            messages = pd.read_pickle(pfn)
+        else:
+            # or download the available date and store it otherwise.
+            messages = self.batch_hist_alarms(p_severities=sev, p_limit=500000)
+            if messages.shape[0] >= 500000:
+                raise ValueError('more than 500000 messages, please change the code in dEngine !!!')
+            messages = messages.iloc[::-1] # turn the messages around, so that the oldest message is the first one. 
+            messages.to_pickle(pfn)
+
+        last_ts = int(messages.iloc[-1]['timestamp'])
+        if p_to != None:
+            p_to_ts = int(arrow.get(p_to).timestamp() * 1e3)
+        else:
+            p_to_ts = int(arrow.now().timestamp() * 1e3)
+        if p_to_ts > last_ts: # not all messages are in the pkl file ...
+            new_messages = self.batch_hist_alarms(p_from = last_ts, p_to = p_to_ts)
+            if not new_messages.empty:
+                new_messages = new_messages[::-1] # turn around the response
+                messages.append(new_messages) # and append to existing messages.
+                # do not store the changes for performance reasons.
+        else:
+            messages = messages[messages['timestamp'] <= p_to_ts]
+        
+        if p_from != None:
+            p_from_ts = int(arrow.get(p_from).timestamp() * 1e3)
+            messages = messages[messages['timestamp'] >= p_from_ts]
+
+        return messages.reset_index()
+
+    # https://api.myplant.io/api-docs/swagger-ui/index.html?url=https://api.myplant.io/v2/api-docs#/history/historicAlarmsRoute
     def batch_hist_alarms(self, p_severities=[500, 600, 650, 700, 800], p_offset=0, p_limit=None, p_from=None, p_to=None):
         """
         Get pandas dataFrame of Events history, either limit or From & to are required
@@ -908,33 +958,31 @@ class Engine:
         p_from              string timestamp in milliseconds.
         p_to                string timestamp in milliseconds.
         """
-        try:
-            tt = r""
-            if p_limit:
-                tt = r"&offset=" + str(p_offset) + \
-                    r"&limit=" + str(p_limit)
+
+        tt = r""
+        if p_limit:
+            tt = r"&offset=" + str(p_offset) + \
+                r"&limit=" + str(p_limit)
+        else:
+            if p_from and p_to:
+                tt = r'&from=' + str(int(arrow.get(p_from).timestamp()) * 1000) + \
+                    r'&to=' + str(int(arrow.get(p_to).timestamp()) * 1000)
             else:
-                if p_from and p_to:
-                    tt = r'&from=' + str(int(arrow.get(p_from).timestamp()) * 1000) + \
-                        r'&to=' + str(int(arrow.get(p_to).timestamp()) * 1000)
-                else:
-                    raise Exception(
-                        r"batch_hist_alarms, invalid Parameters")
+                raise Exception(
+                    r"batch_hist_alarms, invalid Parameters")
 
-            tsvj = ','.join([str(s) for s in p_severities])
+        tsvj = ','.join([str(s) for s in p_severities])
 
-            url = r'/asset/' + str(self['id']) + \
-                r'/history/alarms' + \
-                r'?severities=' + str(tsvj) + tt
+        url = r'/asset/' + str(self['id']) + \
+            r'/history/alarms' + \
+            r'?severities=' + str(tsvj) + tt
 
-            # fetch messages from myplant ....
-            messages = self._mp.fetchdata(url)
+        # fetch messages from myplant ....
+        messages = self._mp.fetchdata(url)
 
-            # import to Pandas DataFrame
-            dm = pd.DataFrame(messages)
-            return dm
-        except:
-            raise
+        # import to Pandas DataFrame
+        dm = pd.DataFrame(messages)
+        return dm
 
     @ property
     def oph_parts(self):
@@ -1129,13 +1177,6 @@ class Engine:
     def BMEP(self):
         return np.around(1200.0 * self.Pmech_nominal / (self.engvol * self.Speed_nominal), decimals=1)
 
-    # @ property
-    # def EPS(self):
-    #     epsilon = {
-            
-    #     }
-
-
     @ property
     def dash(self):
         _dash = dict()
@@ -1163,6 +1204,6 @@ if __name__ == "__main__":
     import pandas
     dmyplant2.cred()
     mp = dmyplant2.MyPlant(0)
+
     import doctest
     doctest.testmod()
-
