@@ -1,5 +1,4 @@
 ﻿from datetime import datetime, timedelta
-from email import message
 import math
 from pprint import pprint as pp
 import pandas as pd
@@ -18,7 +17,6 @@ warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 class MyPlantException(Exception):
     pass
 
-
 class Engine:
     """
     Class to encapsulate Engine properties & methods
@@ -29,6 +27,17 @@ class Engine:
 
     @classmethod
     def lookup_Installed_Fleet(cls, mp, sn):
+        """load data from Installed Fleet file,
+        note this date is not automatically updated.
+        to update, call mp._fetch_installed_base(self):
+
+        Args:
+            mp : Myplant Instance
+            sn : serialNumber
+
+        Returns:
+            _type_: _description_
+        """
         f = mp.get_installed_fleet()
         df = f[f['serialNumber'] == str(sn)]
         return df.to_dict(orient='records')[0]
@@ -43,7 +52,7 @@ class Engine:
             'n': 0,
             'Validation Engine': edf['IB Site Name'] if name == None else name,
             'serialNumber': int(sn),
-            'val start': pd.to_datetime(edf['Commissioning Date']) if valstart == None else pd.to_datetime(valstart),
+            'val start': pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True) if valstart == None else pd.to_datetime(valstart,infer_datetime_format=True),
             'oph@start': oph_start,
             'starts@start': start_start,
             'Asset ID': edf['id'],
@@ -86,33 +95,28 @@ class Engine:
         except:
             self._info = {**self._info, **self._eng}
         try:
-            # fetch data from Myplant only on conditions below
-            #if self._cache_expired()['bool'] or (not os.path.exists(self._picklefile)):
             cachexpired = self._cache_expired()['bool']
             checkpickle = self._check_for_pickling_error()
             if cachexpired or not checkpickle:
-                try:
-                    local_asset = self._mp._asset_data(self._sn)
-                    logging.debug(
-                        f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
-                    local_asset['validation'] = self._eng
-                    self.asset = self._restructure(local_asset)
+                local_asset = self._mp._asset_data(self._sn)
+                logging.debug(
+                    f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
+                local_asset['validation'] = self._eng
+                self.asset = self._restructure(local_asset)
 
-                    # add patch.json values
-                    fpatch = os.getcwd() + '/patch.json'
-                    if os.path.exists(fpatch):
-                        with open(os.getcwd() + "/patch.json", "r", encoding='utf-8-sig') as file:
-                            patch = json.load(file)
-                            if self._sn in patch:
-                                for k,v in patch[self._sn].items():
-                                    if k in self.asset:
-                                        self.asset[k] = {**self.asset[k], **v}
-                                    else:
-                                        self.asset[k] = v
+                # add patch.json values
+                fpatch = os.getcwd() + '/patch.json'
+                if os.path.exists(fpatch):
+                    with open(os.getcwd() + "/patch.json", "r", encoding='utf-8-sig') as file:
+                        patch = json.load(file)
+                        if self._sn in patch:
+                            for k,v in patch[self._sn].items():
+                                if k in self.asset:
+                                    self.asset[k] = {**self.asset[k], **v}
+                                else:
+                                    self.asset[k] = v
 
-                    self._last_fetch_date = epoch_ts(datetime.now().timestamp())
-                except: 
-                    raise
+                self._last_fetch_date = epoch_ts(datetime.now().timestamp())
             else:
                 self.__dict__ = self.ldata
                 # with open(self._picklefile, 'rb') as handle:
@@ -126,12 +130,9 @@ class Engine:
         finally:
             logging.debug(
                 f"Initialize Engine Object, SerialNumber: {self._sn}")
-            try:
-                for k,v in self.lookup_Installed_Fleet(self._mp,self._sn).items():
-                    self[k] = v
-                self._engine_data(eng)
-            except:
-                raise
+            for k,v in self.lookup_Installed_Fleet(self._mp,self._sn).items():
+                self[k] = v
+            self._engine_data(eng)
             self._set_oph_parameter()
             self._save()
 
@@ -153,7 +154,7 @@ class Engine:
 
     # lookup name in all available myplant datastructures & the valdation definition dict
     def _get_xxx(self, name):
-        # search in myplant asset structure
+        # search key in myplant asset structure
         _keys = ['nokey', 'dataItems', 'properties', 'validation']
         for _k in _keys:
             _res = self.get_data(_k, name)
@@ -166,6 +167,31 @@ class Engine:
 
     def __getitem__(self, key):
         return self._get_xxx(key)
+
+    def _get_keyItem_xxx(self, name):
+        # search key in myplant asset structure
+        _keys = ['dataItems', 'properties']
+        for _k in _keys:
+            _res = self.get_keyItem_data(_k, name)
+            if _res:
+                return _res # found => return value & exit function
+        return None # not found, return None.
+
+    def get_keyItem(self,key):
+        return self._get_keyItem_xxx(key)
+
+    def get_keyId(self,key):
+        try:
+            return self._get_keyItem_xxx(key)['id']
+        except KeyError:
+            raise ValueError(f'no "id" for "{key}" found.')
+
+    def get_dataItems(self, dat=['Count_OpHour']):
+        ret = {}
+        for item in dat:
+            res = self.get_keyItem(item)
+            ret.update({ res.get('id',None) : [res.get('name',None),res.get('unit', '')] })
+        return ret
 
     @property
     def time_since_last_server_contact(self):
@@ -315,10 +341,10 @@ class Engine:
         >>> e.get_data('properties','nothing') == None
         True
         """
-        try:
-            return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
-        except:
-            raise
+        return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
+
+    def get_keyItem_data(self, key, item):
+        return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})
 
     def get_property(self, item):
         """
@@ -393,7 +419,7 @@ class Engine:
             pass
 
     def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, debug=False, userfunc=None):
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, forceReload=False, debug=False, userfunc=None):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
@@ -405,6 +431,7 @@ class Engine:
         includeMinMax       string 'false'
         forceDownSampling   string 'false'
         slot                int     dataset differentiator, defaults to 0
+        forceReload         bool    force reload of data from Myplant, defaults to False
         """
 
         def collect_info():
@@ -420,9 +447,12 @@ class Engine:
             info['dataItems'] = itemIds
             return pd.DataFrame.from_dict(info)
 
-        def check_and_loadfile(p_from, fn):
+        def check_and_loadfile(p_from, fn, forceReload):
             ldf = pd.DataFrame([])
             last_p_to = p_from
+            if forceReload:
+                if os.path.exists(fn):
+                    os.remove(fn)
             if os.path.exists(fn):
                 try:
                     dinfo = pd.read_hdf(fn, "info").to_dict()
@@ -448,15 +478,18 @@ class Engine:
             itemIds = { int(k):v for (k,v) in itemIds.items() }
             
             df = pd.DataFrame([])
-            # fn = fr"./data/{self._sn}_{p_from.timestamp}_{timeCycle}_{slot:02d}.hdf"
             fn = fr"./data/{self._sn}_{timeCycle}_{slot:02d}.hdf"
-            df, np_from = check_and_loadfile(p_from, fn)
+            df, np_from = check_and_loadfile(p_from, fn, forceReload)
 
             np_to = arrow.get(p_to).shift(seconds=-timeCycle)
             if np_from.to('Europe/Vienna') < np_to.to('Europe/Vienna'):
                 ndf = self._mp.hist_data(
                     self['id'], itemIds, np_from, p_to, timeCycle)
-                df = df.append(ndf)
+
+                # 2022-02-19 pandas Deprecation warning: use pd.concat instead of append.
+                #df = df.append(ndf)
+                df = pd.concat([df,ndf])
+
                 if debug:
                     print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
 
@@ -473,31 +506,46 @@ class Engine:
         except:
             raise ValueError("Engine hist_data Error")
 
-    def scan_for_highres_DataFrames(self, dat):
-        df = pd.DataFrame([])
-        alarms = self.batch_hist_alarms(
-            p_from=arrow.get(self.val_start).to('Europe/Vienna'),
-            p_to=arrow.get(self.val_start).to('Europe/Vienna').shift(months=3)
-        )
-        alarms = alarms[(alarms['name'] == '1232') |
-                        (alarms['name'] == '1231')]
-        for i, row in enumerate(alarms[['name', 'message', 'datetime']][::-1].values):
-            print(row)
-            df = df.append(
-                self.hist_data(
-                    dat,
-                    p_from=arrow.get(
-                        row[2], 'MM-DD-YYYY HH:mm').shift(minutes=-10),
-                    p_to=arrow.get(
-                        row[2], 'MM-DD-YYYY HH:mm').shift(minutes=10),
-                    timeCycle=1,
-                    slot=i+1))
+    # def scan_for_highres_DataFrames(self, dat):
+    #     df = pd.DataFrame([])
+    #     alarms = self.batch_hist_alarms(
+    #         p_from=arrow.get(self.val_start).to('Europe/Vienna'),
+    #         p_to=arrow.get(self.val_start).to('Europe/Vienna').shift(months=3)
+    #     )
+    #     alarms = alarms[(alarms['name'] == '1232') |
+    #                     (alarms['name'] == '1231')]
+    #     for i, row in enumerate(alarms[['name', 'message', 'datetime']][::-1].values):
+    #         print(row)
+    #         df = df.append(
+    #             self.hist_data(
+    #                 dat,
+    #                 p_from=arrow.get(
+    #                     row[2], 'MM-DD-YYYY HH:mm').shift(minutes=-10),
+    #                 p_to=arrow.get(
+    #                     row[2], 'MM-DD-YYYY HH:mm').shift(minutes=10),
+    #                 timeCycle=1,
+    #                 slot=i+1))
+    #     return df
+
+    def fetch_dataItems(self, ts, items):
+        itemIds = self.get_dataItems(items)
+        tdj = ','.join([str(s) for s in itemIds])
+        url=fr"/asset/{self['id']}/history/batchdata?assetType=J-Engine&from={ts}&to={ts}&dataItemIds={tdj}&timeCycle=30"
+        data =  self._mp.fetchdata(url)
+        # restructure data to dict
+        ds = {}
+        ds['labels'] = ['timestamp'] + [itemIds[x][0] for x in data['columns'][1]]
+        ds['data'] = [[r[0]] + [rr[0] for rr in r[1]] for r in [data['data'][0]]]
+        # import to Pandas DataFrame
+        df = pd.DataFrame(ds['data'], columns=ds['labels'])
         return df
 
     def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=3600,
                               assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
+        DEPRECATED- please use hist_data instead.
+
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
         limit               int64, number of points to download
         p_from              string from iso date or timestamp,
@@ -909,6 +957,19 @@ class Engine:
 
 
     def get_messages(self, p_from=None, p_to=None):
+        """load messages ready for the Finite State Mchine Analysis
+
+        Args:
+            p_from (date, understandable by arrow, optional): first message date. Defaults to very first message.
+            p_to (date, understandable by arrow, optional): last message date. Defaults to Now.
+
+        Raises:
+            ValueError: Inform the User/Programmer if 500000 or more messages are available. 
+            Inthis case the constant value needs to be increased in the code of this function. 
+
+        Returns:
+            pd.DataFrame: Diane Messages.
+        """
         # messages consist of the following severities
         sev = [600,650,700,800]
         # download all available data at the first request and store
@@ -1094,7 +1155,7 @@ class Engine:
         """
         Swept Volume per Cylinder in [l]
         """
-        lkey = self['Engine Series']
+        lkey = self['Engine Series'] or '6'
         return self._cylvol(lkey)
 
     @ property
@@ -1102,9 +1163,7 @@ class Engine:
         """
         Swept Volume per Engine in [l]
         """
-        lkey = self['Engine Series']
-        if not lkey:
-            lkey = '6'
+        lkey = self['Engine Series'] or '6' # lkey defaults to type 6
         return self._cylvol(lkey) * self.Cylinders
 
     @ property
@@ -1169,8 +1228,8 @@ class Engine:
             '6': 1500.0,
             '9': 1000.0
         }
-        lkey = self['Engine Type'][:1]
-        return speed[lkey]
+        lkey = self['Engine Series']
+        return speed[lkey] or 1500.0
         # return self.get_dataItem('Para_Speed_Nominal')
 
     @ property
@@ -1201,9 +1260,11 @@ class Engine:
 if __name__ == "__main__":
 
     import dmyplant2
-    import pandas
+    #import pandas
     dmyplant2.cred()
     mp = dmyplant2.MyPlant(0)
 
     import doctest
+    print('Doctest started.')
     doctest.testmod()
+    print('Doctest completed.')
