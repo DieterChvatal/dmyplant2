@@ -166,7 +166,10 @@ class Engine:
         self.asset[key] = value
 
     def __getitem__(self, key):
-        return self._get_xxx(key)
+        if isinstance(key, list):
+            return [self._get_xxx(k) for k in key]
+        else:
+            return self._get_xxx(key)
 
     def _get_keyItem_xxx(self, name):
         # search key in myplant asset structure
@@ -527,18 +530,27 @@ class Engine:
     #                 slot=i+1))
     #     return df
 
+    # def fetch_dataItems(self, ts, items):
+    #     itemIds = self.get_dataItems(items)
+    #     tdj = ','.join([str(s) for s in itemIds])
+    #     url=fr"/asset/{self['id']}/history/batchdata?assetType=J-Engine&from={ts}&to={ts}&dataItemIds={tdj}&timeCycle=30"
+    #     data =  self._mp.fetchdata(url)
+    #     # restructure data to dict
+    #     ds = {}
+    #     ds['labels'] = ['timestamp'] + [itemIds[x][0] for x in data['columns'][1]]
+    #     ds['data'] = [[r[0]] + [rr[0] for rr in r[1]] for r in [data['data'][0]]]
+    #     # import to Pandas DataFrame
+    #     df = pd.DataFrame(ds['data'], columns=ds['labels'])
+    #     return df
+
     def fetch_dataItems(self, ts, items):
         itemIds = self.get_dataItems(items)
         tdj = ','.join([str(s) for s in itemIds])
         url=fr"/asset/{self['id']}/history/batchdata?assetType=J-Engine&from={ts}&to={ts}&dataItemIds={tdj}&timeCycle=30"
         data =  self._mp.fetchdata(url)
-        # restructure data to dict
-        ds = {}
-        ds['labels'] = ['timestamp'] + [itemIds[x][0] for x in data['columns'][1]]
-        ds['data'] = [[r[0]] + [rr[0] for rr in r[1]] for r in [data['data'][0]]]
-        # import to Pandas DataFrame
-        df = pd.DataFrame(ds['data'], columns=ds['labels'])
-        return df
+        dtime = {'timestamp' : [value[0] for value in [data['data'][0]]]}
+        ddata = {itemIds[skey][0]:[value[1][j][0] for value in [data['data'][0]]] for j,skey in enumerate(data['columns'][1])}
+        return pd.DataFrame(dtime|ddata)
 
     def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=3600,
                               assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
