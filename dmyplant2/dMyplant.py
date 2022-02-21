@@ -1,4 +1,5 @@
-﻿import arrow
+﻿from sqlite3 import Timestamp
+import arrow
 import json
 import base64
 import requests
@@ -10,6 +11,7 @@ from tqdm.auto import tqdm
 import time
 import pickle
 import pandas as pd
+import numpy as np
 from pprint import pprint as pp
 
 try:
@@ -376,9 +378,68 @@ class MyPlant:
         fleet.to_pickle('./data/Installed_base.pkl')
         return fleet
 
+    def reload_installed_fleet(self):
+        self._fetch_installed_base()
+
     def get_installed_fleet(self):
         if os.path.exists('./data/Installed_base.pkl'):
             fleet = pd.read_pickle('./data/Installed_base.pkl')
         else:
             fleet= self._fetch_installed_base()
         return fleet
+
+    def search_installed_fleet(self, sfun):
+        """Search the installed base by a complex search Function:
+
+        e.g.
+        def sfun(x):
+            return (
+                ("BMW" in str(x['IB Site Name'])) and 
+                ("6" == x['Engine Series']) 
+                ... )
+
+        Args:
+            sfun (function(x)): function that returns True if found.
+
+        Returns:
+            df: a pandas dataFrame containing all 
+        """
+        fleet = self.get_installed_fleet()
+        return fleet[fleet.apply(lambda x: sfun(x), axis=1)].reset_index()
+
+    def def_from_installed_fleet(self, res):
+        val_dict = {
+            'n': [],
+            'Validation Engine': [],
+            'serialNumber': [],
+            'val start': [],
+            'oph@start': [],
+            'starts@start': [],
+            'Asset ID': [],
+        }
+        for i, r in tqdm(res.iterrows(), total=res.shape[0], ncols=120, mininterval=1, unit=' engines', desc="Load Engine Data from MyPlant:"):
+            val_dict['n'].append(i)
+            val_dict['Validation Engine'].append(r['IB Site Name'] + ' ' + r['Engine ID'])
+            val_dict['serialNumber'].append(np.int64(r['serialNumber']))
+            val_dict['val start'].append(np.datetime64(r['Commissioning Date']))
+
+            id = int(r['id'])
+            ts = int(pd.to_datetime(r['Commissioning Date']).timestamp()*1e3)
+            oph = self.historical_dataItem(id, 161, ts).get('value', None) or 0
+            starts = self.historical_dataItem(id, 179, ts).get('value', None) or 0
+            
+            val_dict['oph@start'].append(np.int64(oph))
+            val_dict['starts@start'].append(np.int64(starts))
+            val_dict['Asset ID'].append(np.float64(r['id']))
+
+        # val_dict = {
+        #     'n': [i for i, r in res.iterrows()],
+        #     'Validation Engine': [r['IB Site Name'] + ' ' + r['Engine ID'] for i, r in res.iterrows()],
+        #     'serialNumber': [np.int64(r['serialNumber']) for i, r in res.iterrows()],
+        #     'val start': [np.datetime64(r['Commissioning Date']) for i, r in res.iterrows()],
+        #     'oph@start': [np.int64(0)] * res.shape[0],
+        #     'starts@start': [np.int64(0)] * res.shape[0],
+        #     'Asset ID': [np.float64(r['id']) for i, r in res.iterrows()],
+        # }
+        return pd.DataFrame(val_dict)
+

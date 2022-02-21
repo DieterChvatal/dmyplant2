@@ -550,6 +550,8 @@ class Engine:
         data =  self._mp.fetchdata(url)
         dtime = {'timestamp' : [value[0] for value in [data['data'][0]]]}
         ddata = {itemIds[skey][0]:[value[1][j][0] for value in [data['data'][0]]] for j,skey in enumerate(data['columns'][1])}
+        return pd.DataFrame({**dtime,**ddata})
+        # for python 9.x or higher 
         return pd.DataFrame(dtime|ddata)
 
     def _batch_hist_dataItems(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=3600,
