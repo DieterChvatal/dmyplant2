@@ -216,18 +216,18 @@ class MyPlant:
         """
         return self.fetchdata(url=fr"/asset/{id}/dataitem/{itemId}?timestamp={timestamp}")
 
-    def history_dataItem(self, id, itemId, p_from, p_to, timeCycle=3600):
-        """
-        url: /asset/{assetId}/dataitem/{dataItemId}
-        Parameters:
-        Name	    type    Description
-        assetId     int64   Id of the Asset to query the DateItem for.
-        dataItemId  int64   Id of the DataItem to query.
-        p_from      int64   timestamp start timestamp.
-        p_to        int64   timestamp stop timestamp.
-        timeCycle   int64   interval in seconds.
-        """
-        return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
+    # def history_dataItem(self, id, itemId, p_from, p_to, timeCycle=3600):
+    #     """
+    #     url: /asset/{assetId}/dataitem/{dataItemId}
+    #     Parameters:
+    #     Name	    type    Description
+    #     assetId     int64   Id of the Asset to query the DateItem for.
+    #     dataItemId  int64   Id of the DataItem to query.
+    #     p_from      int64   timestamp start timestamp.
+    #     p_to        int64   timestamp stop timestamp.
+    #     timeCycle   int64   interval in seconds.
+    #     """
+    #     return self.fetchdata(url=fr"/asset/{id}/history/data?from={p_from}&to={p_to}&assetType=J-Engine&dataItemId={itemId}&timeCycle={timeCycle}&includeMinMax=false&forceDownSampling=false")
 
     def _history_batchdata(self, id, itemIds, lp_from, lp_to, timeCycle=3600):
         # make sure itemids have the format { int: [str,str], int: [str,str], ...}
@@ -277,8 +277,11 @@ class MyPlant:
             # for now assume same itemID's are always included ... need to be included in a check
             ldf = self._history_batchdata(
                 id, itemIds, lp_from, lp_to, timeCycle)
+
             # and append each chunk to the return df
-            df = df.append(ldf)
+            #df = df.append(ldf) # 2022-02-19: deprecation warning => use concat in future!
+            df = pd.concat([df, ldf])
+            
             pbar.update(rows_per_request)
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
@@ -319,7 +322,8 @@ class MyPlant:
         for lan in dataitems:
             output=pd.DataFrame(dataitems[lan]['groups'][0]['values'].items(), columns=['dataitem','myPlantName'])
             output['lan']=lan
-            dataitems_df=dataitems_df.append(output, ignore_index=True)
+            #dataitems_df=dataitems_df.append(output, ignore_index=True)
+            dataitems_df = pd.concat([dataitems_df,output], ignore_index=True)
         dataitems_df.head()
 
         def remove_jen (row): #with best practice could probably be shortened
@@ -338,6 +342,11 @@ class MyPlant:
             else:
                 ret[key] = value
         return ret
+
+    def fetch_available_data(self):
+        url = "/model/J-Engine"
+        res = self.fetchdata(url)
+        return res
 
     def fetch_installed_base(self,fields, properties, dataItems, limit = None):
         url = "/asset/" + \

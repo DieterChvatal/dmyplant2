@@ -122,7 +122,7 @@ class Validation:
         Returns:
             [pd.dataFrame]: [Validation definition as dataFrame]
         """
-        dv = pd.read_csv(filename, sep=';', encoding='utf-8')
+        dv = pd.read_csv(filename, sep=';', encoding='utf-8', index_col=0)
         dv['val start'] = pd.to_datetime(dv['val start'], format='%d.%m.%Y')
         return dv
 
@@ -181,7 +181,7 @@ class Validation:
         Returns:
             [pd.dataFrame]: [Failure Observations as dataFrame]
         """
-        fl = pd.read_csv(filename, sep=';', encoding='utf-8')
+        fl = pd.read_csv(filename, sep=';', encoding='utf-8', index_col=0)
         fl['date'] = pd.to_datetime(fl['date'], format='%d.%m.%Y')
         return fl
 
