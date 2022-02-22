@@ -43,21 +43,29 @@ class Engine:
         return df.to_dict(orient='records')[0]
 
     @classmethod
-    def from_sn(cls, mp, sn, name=None, valstart = None, oph_start=0, start_start=0 ):
-        # f = mp.get_installed_fleet()
-        # df = f[f['serialNumber'] == str(sn)]
-        # edf = df.to_dict(orient='records')[0]
+    def from_sn(cls, mp, sn, name=None, valstart = None, oph_start=None, start_start=None, 
+        Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
         edf = cls.lookup_Installed_Fleet(mp, sn)
+        id = int(edf['id'])
+        if not valstart: # take Commissioning date if no valstart date is given. 
+            valstart = pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True)
+        ts = int(valstart.timestamp()*1e3)
+        if not oph_start:
+            oph_start = mp.historical_dataItem(id, 161, ts).get('value', None) or 0
+        if not start_start:
+            start_start = mp.historical_dataItem(id, 179, ts).get('value', None) or 0
+        if not name:
+            name = edf['IB Site Name'] + ' ' + edf['Engine ID']
         eng = {
             'n': 0,
-            'Validation Engine': edf['IB Site Name'] if name == None else name,
+            'Validation Engine': name,
             'serialNumber': int(sn),
-            'val start': pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True) if valstart == None else pd.to_datetime(valstart,infer_datetime_format=True),
-            'oph@start': oph_start,
-            'starts@start': start_start,
-            'Asset ID': edf['id'],
-            'Old PU first replaced OPH': None,
-            'Old PUs replaced before upgrade': None
+            'val start': valstart,
+            'oph@start': int(oph_start),
+            'starts@start': int(start_start),
+            'Asset ID': int(id),
+            'Old Parts first replaced OPH': Old_Parts_first_replaced_OPH,
+            'Old Parts replaced before upgrade': Old_Parts_replaced_before_upgrade
         }
         return cls(mp, eng)
 
@@ -150,7 +158,8 @@ class Engine:
             return False
 
     def __str__(self):
-        return f"{self['serialNumber']} {self['Engine ID']} {self['Name'][:20] + (self['Name'][20:] and ' ..'):23s}"
+        return f"{self['serialNumber']} {self['Name']}"
+        #return f"{self['serialNumber']} {self['Engine ID']} {self['Name'][:20] + (self['Name'][20:] and ' ..'):23s}"
 
     # lookup name in all available myplant datastructures & the valdation definition dict
     def _get_xxx(self, name):

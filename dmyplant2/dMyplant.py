@@ -417,16 +417,18 @@ class MyPlant:
             'starts@start': [],
             'Asset ID': [],
         }
-        for i, r in tqdm(res.iterrows(), total=res.shape[0], ncols=120, mininterval=1, unit=' engines', desc="Load Engine Data from MyPlant:"):
+        for i, r in tqdm(res.iterrows(), total=res.shape[0], ncols=120, mininterval=1, unit=' engines', desc="Loading Myplant Data"):
             val_dict['n'].append(i)
             val_dict['Validation Engine'].append(r['IB Site Name'] + ' ' + r['Engine ID'])
             val_dict['serialNumber'].append(np.int64(r['serialNumber']))
             val_dict['val start'].append(np.datetime64(r['Commissioning Date']))
 
-            id = int(r['id'])
-            ts = int(pd.to_datetime(r['Commissioning Date']).timestamp()*1e3)
-            oph = self.historical_dataItem(id, 161, ts).get('value', None) or 0
-            starts = self.historical_dataItem(id, 179, ts).get('value', None) or 0
+            # id = int(r['id'])
+            # ts = int(pd.to_datetime(r['Commissioning Date']).timestamp()*1e3)
+            # oph = self.historical_dataItem(id, 161, ts).get('value', None) or 0
+            # starts = self.historical_dataItem(id, 179, ts).get('value', None) or 0
+            oph = -1
+            starts = -1
             
             val_dict['oph@start'].append(np.int64(oph))
             val_dict['starts@start'].append(np.int64(starts))
