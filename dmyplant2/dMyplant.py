@@ -132,6 +132,64 @@ class MyPlant:
                      for x in ds[sub_key] if x['name'] == data_item_name}
             return local.pop() if len(local) != 0 else None
 
+    @ classmethod
+    def load_def_csv(cls, filename):
+        """load CSV Validation definition file 
+
+        example content:
+        n;Validation Engine;serialNumber;val start;oph@start;starts@start;Asset ID;Old PU first replaced OPH;Old PUs replaced before upgrade
+        0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378;103791;;
+        ....
+
+        Args:
+            filename ([string]): [Filename of definition file]
+
+        Returns:
+            [pd.dataFrame]: [Validation definition as dataFrame]
+        """
+        dv = pd.read_csv(filename, sep=';', encoding='utf-8')
+        dv['val start'] = pd.to_datetime(dv['val start'], format='%d.%m.%Y')
+        return dv
+
+    @ classmethod
+    def load_def_excel(self, filename, sheetname, mp=None):
+        """load CSV Validation definition file 
+        oph@start and starts@start can be automatically calculated based on val start if no information provided
+        (Data is taken from the end of the startday from the validation)
+
+        example content:
+        n;Validation Engine;serialNumber;val start;oph@start;starts@start;Asset ID;Old PU first replaced OPH;Old PUs replaced before upgrade
+        0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378;103791;;
+        ....
+        
+        Args:
+            filename ([string]): [Filename of definition file] must include .xslx at the end
+            sheetname ([string]): Relevant sheetname in file
+            mp (myPlant Objekt): Optional myplant object to enable auto filling of missing values
+
+        Returns:
+            [pd.dataFrame]: [Validation definition as dataFrame]
+        """
+        dval=pd.read_excel(filename, sheet_name=sheetname, usecols=['Validation Engine', 'serialNumber', 'val start', 'oph@start', 'starts@start'])
+        dval.dropna(subset=['Validation Engine', 'serialNumber', 'val start'], inplace=True)
+        dval['n']=dval.index #add column 'n for handling in further methods
+        dval['serialNumber'] = dval['serialNumber'].astype(int).astype(str)
+        if mp!=None:
+            for i in range(len(dval)):
+                if np.isnan(dval['oph@start'].iloc[i]) or np.isnan(dval['starts@start'].iloc[i]): #check for missing values
+                    asset = mp._asset_data(dval['serialNumber'].iloc[i]) #get assetId from Serial Number
+                    assetId=asset['properties'][0]['assetId']
+                    itemIds={161: ['CountOph', 'h'], 179: ['Starts', '']}
+                    p_from=arrow.get(dval['val start'].iloc[i])
+                    p_to=p_from.shift(days=1)
+                    add_data=mp.hist_data(assetId, itemIds, p_from, p_to, timeCycle=3600)
+                    if add_data.empty:
+                        raise ValueError('Error! No setup data available for engine '+dval['Validation Engine'].iloc[i]+' for specified val start. Please change the val start date or insert the oph@start and starts@start manually in the excel file and run the program again.')
+                    if np.isnan(dval['oph@start'].iloc[i]): dval['oph@start'].iloc[i]=add_data['CountOph'].iloc[-1]
+                    if np.isnan(dval['starts@start'].iloc[i]): dval['starts@start'].iloc[i]=add_data['Starts'].iloc[-1]
+            
+        return dval
+
     @property
     def caching(self):
         """the current cache time"""
