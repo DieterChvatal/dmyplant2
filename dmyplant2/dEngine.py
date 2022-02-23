@@ -490,7 +490,7 @@ class Engine:
             itemIds = { int(k):v for (k,v) in itemIds.items() }
             
             df = pd.DataFrame([])
-            fn = fr"./data/{self._sn}_{timeCycle}_{slot:02d}.hdf"
+            fn = fr"./data/{self._sn}_{timeCycle}_{int(slot):02d}.hdf"
             df, np_from = check_and_loadfile(p_from, fn, forceReload)
 
             np_to = arrow.get(p_to).shift(seconds=-timeCycle)
