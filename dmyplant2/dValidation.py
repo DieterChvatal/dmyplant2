@@ -85,7 +85,7 @@ class Validation:
             
         for i, eng in enumerate(engines):
             try:
-                e = lengine(mp, eng)
+                e = lengine.from_eng(mp, eng)
             except:
                 print("Engine Instances cannot not be created.")
                 sys.exit(1)

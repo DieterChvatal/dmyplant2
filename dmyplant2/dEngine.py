@@ -43,12 +43,12 @@ class Engine:
         return df.to_dict(orient='records')[0]
 
     @classmethod
-    def from_sn(cls, mp, sn, name=None, valstart = None, oph_start=None, start_start=None, 
+    def from_fleet(cls, mp, edf, n=0, name=None, valstart=None, oph_start=None, start_start=None, 
         Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
-        edf = cls.lookup_Installed_Fleet(mp, sn)
         id = int(edf['id'])
-        if not valstart: # take Commissioning date if no valstart date is given. 
+        if not valstart: # take Commissioning date if no valstart date is given.
             valstart = pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True)
+        valstart = pd.to_datetime(valstart,infer_datetime_format=True)
         ts = int(valstart.timestamp()*1e3)
         if not oph_start:
             oph_start = mp.historical_dataItem(id, 161, ts).get('value', None) or 0
@@ -56,20 +56,61 @@ class Engine:
             start_start = mp.historical_dataItem(id, 179, ts).get('value', None) or 0
         if not name:
             name = edf['IB Site Name'] + ' ' + edf['Engine ID']
-        eng = {
-            'n': 0,
-            'Validation Engine': name,
-            'serialNumber': int(sn),
-            'val start': valstart,
-            'oph@start': int(oph_start),
-            'starts@start': int(start_start),
-            'Asset ID': int(id),
-            'Old Parts first replaced OPH': Old_Parts_first_replaced_OPH,
-            'Old Parts replaced before upgrade': Old_Parts_replaced_before_upgrade
-        }
-        return cls(mp, eng)
+        return cls(
+            mp, 
+            int(edf['serialNumber']), 
+            n, 
+            name, 
+            valstart.date().strftime('%Y-%m-%d'), 
+            oph_start, start_start, 
+            id, 
+            Old_Parts_first_replaced_OPH, Old_Parts_replaced_before_upgrade)
 
-    def __init__(self, mp, eng):
+    @classmethod
+    def from_sn(cls, mp, sn, n=0, name=None, valstart=None, oph_start=None, start_start=None, 
+        Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
+        edf = cls.lookup_Installed_Fleet(mp, sn)
+        return cls.from_fleet(
+            mp, 
+            edf, 
+            n, 
+            name, 
+            valstart, 
+            oph_start, start_start, 
+            Old_Parts_first_replaced_OPH, 
+            Old_Parts_replaced_before_upgrade)
+
+        # id = int(edf['id'])
+        # if not valstart: # take Commissioning date if no valstart date is given.
+        #     valstart = pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True)
+        # valstart = pd.to_datetime(valstart,infer_datetime_format=True)
+        # ts = int(valstart.timestamp()*1e3)
+        # if not oph_start:
+        #     oph_start = mp.historical_dataItem(id, 161, ts).get('value', None) or 0
+        # if not start_start:
+        #     start_start = mp.historical_dataItem(id, 179, ts).get('value', None) or 0
+        # if not name:
+        #     name = edf['IB Site Name'] + ' ' + edf['Engine ID']
+        # return cls(mp, sn, n, name, valstart.date().strftime('%Y-%m-%d'), oph_start, start_start, id, 
+        #                                     Old_Parts_first_replaced_OPH, Old_Parts_replaced_before_upgrade)
+
+    @classmethod
+    def from_eng(cls, mp, eng):
+        return cls(
+            mp, 
+            eng['serialNumber'], 
+            eng['n'],
+            eng['Validation Engine'],
+            eng['val start'],
+            eng['oph@start'],
+            eng['starts@start'] if 'starts@start' in eng else 0,
+            eng['Asset ID'] if 'Asset ID' in eng else 0,
+            eng['Old Parts first replaced OPH'] if 'Old Parts first replaced OPH' in eng else None,
+            eng['Old Parts replaced before upgrade'] if 'Old Parts replaced before upgrade' in eng else None,)
+
+    #def __init__(self, mp, eng):
+    def __init__(self, mp, sn=None, n=None, name=None, valstart = None, oph_start=None, start_start=None, 
+        id = None, Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
         """Engine Constructor
 
         Args:
@@ -82,14 +123,34 @@ class Engine:
         '1320072'
         """
 
+        if not all([sn!= None,name!= None,valstart!= None,oph_start!= None,start_start!=None,id!=None]):
+            raise ValueError('Engine Constructor - missing parameters')
+
+        valstart = pd.to_datetime(valstart,infer_datetime_format=True)
+        #ts = int(valstart.timestamp()*1e3)
+
+        eng = {
+            'n': n,
+            'Validation Engine': name,
+            'serialNumber': int(sn),
+            'val start': valstart,
+            'oph@start': int(oph_start),
+            'starts@start': int(start_start),
+            'Asset ID': int(id),
+            'Old Parts first replaced OPH': Old_Parts_first_replaced_OPH,
+            'Old Parts replaced before upgrade': Old_Parts_replaced_before_upgrade
+        }
+
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
         self._eng = eng
         self._sn = str(eng['serialNumber'])
-        
-        fname = os.getcwd() + '/data/' + self._sn
-        self._picklefile = fname + '.pkl'    # load persitant data
-        self._infofile = fname + '.json'
+        self._data_base = os.getcwd() + f'\\data\\{str(self._sn)}'
+        if not os.path.exists(self._data_base):
+            os.makedirs(self._data_base)        
+        #fname = os.getcwd() + self._data_base + '/' + self._sn
+        self._picklefile = self._fname + '.pkl'    # load persitant data
+        self._infofile = self._fname + '.json'
 
         # load info json & lastfetchdate
         try:
@@ -143,6 +204,10 @@ class Engine:
             self._engine_data(eng)
             self._set_oph_parameter()
             self._save()
+
+    @property
+    def _fname(self):
+        return self._data_base + '\\' + self._sn
 
     def _check_for_pickling_error(self):
         if os.path.exists(self._picklefile):
@@ -317,16 +382,17 @@ class Engine:
             with open(self._infofile, 'w') as f:
                 json.dump(self._info, f)
         except FileNotFoundError:
-            errortext = f'File {self._infofile} not found.'
+            errortext = f'Cound not write to File {self._infofile}.'
             logging.error(errortext)
+            raise
 
         try:
             with open(self._picklefile, 'wb') as handle:
                 pickle.dump(self.__dict__, handle, protocol=4)
         except FileNotFoundError:
-            errortext = f'File {self._picklefile} not found.'
+            errortext = f'Cound not write to File {self._picklefile}.'
             logging.error(errortext)
-            # raise Exception(errortext)
+            raise
 
     def get_data(self, key, item):
         """
@@ -490,7 +556,7 @@ class Engine:
             itemIds = { int(k):v for (k,v) in itemIds.items() }
             
             df = pd.DataFrame([])
-            fn = fr"./data/{self._sn}_{timeCycle}_{int(slot):02d}.hdf"
+            fn = self._fname + fr"_{timeCycle}_{int(slot):02d}.hdf"
             df, np_from = check_and_loadfile(p_from, fn, forceReload)
 
             np_to = arrow.get(p_to).shift(seconds=-timeCycle)
@@ -909,13 +975,13 @@ class Engine:
         rec = dict()
         try:
             try:
-                sample = load_json('data/'+sampleId+'.json')
+                sample = load_json(self._fname+'\\'+sampleId+'.json')
                 print('.', end='')
                 #print(f"###### in dengine.get_OilLabReport => sample Data for Development provided: {sampleId}")
             except FileNotFoundError:
                 sample = self._mp.fetchdata(url)
                 #print(f"###### in dengine.get_OilLabReport => sample Data saved for Development: {sampleId}")
-                #save_json('data/'+sampleId+'.json', sample)
+                #save_json(self._fname+'\\'+sampleId+'.json', sample)
             rec['probe.aluminium'] = get_corr(sample,'probe.aluminium', None)  #'2',
             rec['probe.aluminium-alert'] = get_corr(sample,'probe.aluminium-alert', None) # 'G',
             rec['probe.barium'] = get_corr(sample,'probe.barium', None) # '<0.0001',
@@ -998,7 +1064,7 @@ class Engine:
         # download all available data at the first request and store
         # to the engine specific pickle file.
         # check if there is a pickle file, messages are stored as dataframes
-        pfn = f"./data/{str(self._sn)}_messages.pkl"
+        pfn = self._fname +"_messages.pkl"
         if os.path.exists(pfn):
             messages = pd.read_pickle(pfn)
         else:
