@@ -1051,8 +1051,11 @@ class Engine:
         # check if there is a pickle file, messages are stored as dataframes
         pfn = self._fname +"_messages.pkl"
         if os.path.exists(pfn):
-            messages = pd.read_pickle(pfn)
-        else:
+            messages = pd.read_pickle(pfn)    
+            if messages.empty:      # avoid errors with an empty messages dataframe ---
+                os.remove(pfn)
+
+        if not os.path.exists(pfn):
             # or download the available date and store it otherwise.
             messages = self.batch_hist_alarms(p_severities=sev, p_limit=500000)
             if messages.shape[0] >= 500000:

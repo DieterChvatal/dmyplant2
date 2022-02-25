@@ -257,6 +257,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True
     #     print("Key: {}, value: {}".format(entry[0], entry[1]))
 
     fig, ax = plt.subplots(*args, **kwargs)
+    fig.patch.set_facecolor('white')
 
     axes = [ax]
     ax.tick_params(axis='x', labelrotation=30)
@@ -343,7 +344,48 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True
     labs = [l.get_label() for l in lns]
     if legend:
         axes[0].legend(lns, labs, loc=0)
+    return fig, ax, axes
 
+def add_lines(start, lines, ax, *args, **kwargs):
+    ax.axvline(arrow.get(start).shift(seconds=0).datetime, *args, **kwargs)
+    for l in lines:
+        ax.axvline(arrow.get(start).shift(seconds=l).datetime, *args, **kwargs)
+
+def add_table(summary, ax, *args, **kwargs):
+    """
+    available options for loc:
+    best, upper right, upper left, lower left, lower right, center left, center right
+    lower center, upper center, center, top right,top left, bottom left, bottom right
+    right, left, top, bottom
+    """
+    ax.table(
+        cellText=summary.values, 
+        colWidths=[0.1]*len(summary.columns),
+        colLabels=summary.columns,
+        cellLoc='center', 
+        rowLoc='center',
+        *args, **kwargs)
+        #loc='upper left')
+
+def _plot(idf, x12='datetime', y1 = ['Various_Values_SpeedAct'], y2 = ['Power_PowerAct'], ylim2=(0,5000), *args, **kwargs):
+    ax = idf[[x12] + y1].plot(
+    x=x12,
+    y=y1,
+    kind='line',
+    grid=True, 
+    *args, **kwargs)
+
+    ax2 = idf[[x12] + y2].plot(
+    x=x12,
+    y=y2,
+    secondary_y = True,
+    ax = ax,
+    kind='line', 
+    grid=True, 
+    *args, **kwargs)
+
+    ax2.set_ylim(ylim2)
+    return ax, ax2, idf
 
 def scatter_chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
@@ -392,6 +434,7 @@ def scatter_chart(d, ys, x='datetime', title=None, grid=True, legend=True, noteb
     #     print("Key: {}, value: {}".format(entry[0], entry[1]))
 
     fig, ax = plt.subplots(*args, **kwargs)
+    fig.patch.set_facecolor('white')
 
     axes = [ax]
     ax.tick_params(axis='x', labelrotation=30)
