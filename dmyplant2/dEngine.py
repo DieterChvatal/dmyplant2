@@ -17,6 +17,9 @@ warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 class MyPlantException(Exception):
     pass
 
+class temp:
+    valstart = None
+    eng = None
 class Engine:
     """
     Class to encapsulate Engine properties & methods
@@ -63,7 +66,6 @@ class Engine:
             name, 
             valstart.date().strftime('%Y-%m-%d'), 
             oph_start, start_start, 
-            id, 
             Old_Parts_first_replaced_OPH, Old_Parts_replaced_before_upgrade)
 
     @classmethod
@@ -90,12 +92,11 @@ class Engine:
             eng['val start'],
             eng['oph@start'],
             eng['starts@start'] if 'starts@start' in eng else 0,
-            eng['Asset ID'] if 'Asset ID' in eng else 0,
             eng['Old Parts first replaced OPH'] if 'Old Parts first replaced OPH' in eng else None,
             eng['Old Parts replaced before upgrade'] if 'Old Parts replaced before upgrade' in eng else None,)
 
     def __init__(self, mp, sn=None, n=None, name=None, valstart = None, oph_start=None, start_start=None, 
-        id = None, Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
+        Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
         """Engine Constructor
 
         Args:
@@ -108,55 +109,69 @@ class Engine:
         '1320072'
         """
 
-        if not all([sn!= None,name!= None,valstart!= None,oph_start!= None,start_start!=None,id!=None]):
+        if not all([sn!= None,name!= None,valstart!= None,oph_start!= None,start_start!=None]):
             raise ValueError('Engine Constructor - missing parameters')
 
-        valstart = pd.to_datetime(valstart,infer_datetime_format=True)
-        #ts = int(valstart.timestamp()*1e3)
-
-        eng = {
-            'n': n,
-            'Validation Engine': name,
-            'serialNumber': int(sn),
-            'val start': valstart,
-            'oph@start': int(oph_start),
-            'starts@start': int(start_start),
-            'Asset ID': int(id),
-            'Old Parts first replaced OPH': Old_Parts_first_replaced_OPH,
-            'Old Parts replaced before upgrade': Old_Parts_replaced_before_upgrade
-        }
+         
+        # temp.valstart = pd.to_datetime(valstart,infer_datetime_format=True)
+        # temp.eng = {
+        #         'n': n,
+        #         'Validation Engine': name,
+        #         'serialNumber': int(sn),
+        #         'val start': valstart,
+        #         'oph@start': int(oph_start),
+        #         'starts@start': int(start_start),
+        #         'Old Parts first replaced OPH': Old_Parts_first_replaced_OPH,
+        #         'Old Parts replaced before upgrade': Old_Parts_replaced_before_upgrade
+        #     }
 
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
-        self._eng = eng
-        self._sn = str(eng['serialNumber'])
+        #self._eng = eng
+        #self._sn = str(temp.eng['serialNumber'])
+        self._sn = str(sn)
+        self._name = name
         self._data_base = os.getcwd() + f'/data/{str(self._sn)}'
         if not os.path.exists(self._data_base):
             os.makedirs(self._data_base)        
         #fname = os.getcwd() + self._data_base + '/' + self._sn
         self._picklefile = self._fname + '.pkl'    # load persitant data
         self._infofile = self._fname + '.json'
+        self._last_fetch_date = None
 
         # load info json & lastfetchdate
         try:
             with open(self._infofile) as f:
-                self._info = json.load(f)
-                if 'last_fetch_date' in self._info:
-                    self._last_fetch_date = self._info['last_fetch_date']
-                self._info = {**self._info, **self._eng}
-                self._info['val start'] = arrow.get(
-                    self._eng['val start']).timestamp()
-        except:
-            self._info = {**self._info, **self._eng}
+                #self._info = json.load(f)
+                _info = json.load(f)
+                #if 'last_fetch_date' in self._info:
+                if 'last_fetch_date' in _info:
+                    self._last_fetch_date = _info['last_fetch_date']
+                    #self._last_fetch_date = self._info['last_fetch_date']
+                #self._info = {**self._info, **self._eng}
+                #self._info['val start'] = arrow.get(
+                #    self._eng['val start']).timestamp()
+        except FileNotFoundError:
+            pass
+
+        # except: # gefährlicher, uspezifischer Code ?!
+        #     self._info = {**self._info, **self._eng}
         try:
             cachexpired = self._cache_expired()['bool']
             checkpickle = self._check_for_pickling_error()
             if cachexpired or not checkpickle:
                 local_asset = self._mp._asset_data(self._sn)
-                logging.debug(
-                    f"{eng['Validation Engine']}, Engine Data fetched from Myplant")
-                local_asset['validation'] = self._eng
-                self.asset = self._restructure(local_asset)
+                #logging.debug(f"{temp.eng['Validation Engine']}, Engine Data fetched from Myplant")
+                logging.debug(f"{name}, Engine Data fetched from Myplant")
+                #local_asset['validation'] = temp.eng
+                local_val = Engine.lookup_Installed_Fleet(self._mp, self._sn)
+                local_val.update({  
+                    'val start': pd.to_datetime(valstart,infer_datetime_format=True),
+                    'oph@start': int(oph_start),
+                    'starts@start': int(start_start)
+                })
+                local_asset['validation'] = local_val
+                self.assetdata = self._restructure(local_asset)
 
                 # add patch.json values
                 fpatch = os.getcwd() + '/patch.json'
@@ -165,10 +180,10 @@ class Engine:
                         patch = json.load(file)
                         if self._sn in patch:
                             for k,v in patch[self._sn].items():
-                                if k in self.asset:
-                                    self.asset[k] = {**self.asset[k], **v}
+                                if k in self.assetdata:
+                                    self.assetdata[k] = {**self.assetdata[k], **v}
                                 else:
-                                    self.asset[k] = v
+                                    self.assetdata[k] = v
 
                 self._last_fetch_date = epoch_ts(datetime.now().timestamp())
             else:
@@ -184,9 +199,10 @@ class Engine:
         finally:
             logging.debug(
                 f"Initialize Engine Object, SerialNumber: {self._sn}")
-            for k,v in self.lookup_Installed_Fleet(self._mp,self._sn).items():
-                self[k] = v
-            self._engine_data(eng)
+            #for k,v in self.lookup_Installed_Fleet(self._mp,self._sn).items():
+            #    self[k] = v
+            #self._engine_data(temp.eng)
+            self._engine_data()
             self._set_oph_parameter()
             self._save()
 
@@ -222,13 +238,16 @@ class Engine:
         return _res
 
     def __setitem__(self, key, value):
-        self.asset[key] = value
+        self.assetdata[key] = value
 
     def __getitem__(self, key):
         if isinstance(key, list):
             return [self._get_xxx(k) for k in key]
         else:
             return self._get_xxx(key)
+
+    def __getattr__(self,name):
+        return self[name]
 
     def _get_keyItem_xxx(self, name):
         # search key in myplant asset structure
@@ -263,12 +282,16 @@ class Engine:
             float: time since last Server contact
         """
         now = datetime.now().timestamp()
-        delta = now - self.__dict__.get('_last_fetch_date', 0.0)
+        if self._last_fetch_date != None:
+            delta = now - self._last_fetch_date
+        else: 
+            delta = 0.0
         return delta
 
     def _cache_expired(self):
         delta = self.time_since_last_server_contact
         return {'delta': delta, 'bool': delta > self._mp.caching}
+
 
     def _restructure(self, local_asset):
         # restructure downloaded data for easier data lookup
@@ -285,20 +308,22 @@ class Engine:
         # for the oph(ts) function
         # this function uses the exect date to calculate
         # the interpolation line
-        if (self._lastDataFlowDate - self._valstart_ts) == 0:
+        llastDataFlowDate = epoch_ts(self.assetdata['status'].get('lastDataFlowDate',None))
+        
+        if ( llastDataFlowDate - self.valstart_ts ) == 0:
             self._k = 0
         else:
-            self._k = float(self.oph_parts /
-                            (self._lastDataFlowDate - self._valstart_ts))
+            self._k = float(self['oph_parts'] /
+                            (llastDataFlowDate - self.valstart_ts))
         # for the oph2(ts) function
         # this function uses the myplant reported hours and the
         # request time to calculate the inperpolation
         # for low validation oph this gives more consistent results
-        if (arrow.now().timestamp() - self._valstart_ts) == 0:
+        if (arrow.now().timestamp() - self.valstart_ts) == 0:
             self._k = 0
         else:
-            self._k2 = float(self.oph_parts /
-                            (arrow.now().timestamp() - self._valstart_ts))
+            self._k2 = float(self['oph_parts'] /
+                            (arrow.now().timestamp() - self.valstart_ts))
 
     def oph(self, ts):
         """Interpolated Operating hours
@@ -314,7 +339,7 @@ class Engine:
         >>> 3000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp())
         True
         """
-        y = self._k * (ts - self._valstart_ts)
+        y = self._k * (ts - self.valstart_ts)
         y = y if y > 0.0 else 0.0
         return y
 
@@ -332,16 +357,16 @@ class Engine:
         >>> 3000.0 <= e.oph2(arrow.get("2021-03-01 00:00").timestamp())
         True
         """
-        y = self._k2 * (ts - self._valstart_ts)
+        y = self._k2 * (ts - self.valstart_ts)
         y = y if y > 0.0 else 0.0
         return y
 
-    def _engine_data(self, eng):
+    #def _engine_data(self, eng):
+    def _engine_data(self):
 
-        self._valstart_ts = epoch_ts(arrow.get(self['val start']).timestamp())
-        self._lastDataFlowDate = epoch_ts(self['status'].get(
-                    'lastDataFlowDate', None))
-        self['Name'] = self['Validation Engine']
+        #self._valstart_ts = epoch_ts(arrow.get(self['val start']).timestamp())
+        #self._lastDataFlowDate = epoch_ts(self['status'].get(
+        #            'lastDataFlowDate', None))
         if self['Engine Type']:
             self['P'] = int(str(self['Engine Type'])[-2:] if str(self['Engine Type'])[-2:].isdigit() else 0)
             #self._P = int(str(self['Engine Type'])[-2:] if str(self['Engine Type'])[-2:].isdigit() else 0)
@@ -349,23 +374,29 @@ class Engine:
             raise Exception(f'Key "Engine Type" missing in asset of SN {self._sn}\nconsider a patch in patch.json')
 
         # for compatibility
-        self.serialNumber = self['serialNumber']
-        self.id = self['id']
-        self['Name'] = self['Validation Engine']
+        self['oph_start'] = self['oph@start']
+        self['starts_start'] = self['starts@start']
+        #self.serialNumber = self['serialNumber']
+        #self.id = self['id']
+
+        self['Name'] = self._name 
         self['Name'] = self['Name'] if self['Name'] else self['IB Project Name']
-        self.Name = self['Name']
-        self.val_start = self['val start']
-        self.oph_start = self['oph@start']
+        self._name = self['Name']
+        self['Validation Engine'] = self._name
+        self['oph_parts'] = self['Count_OpHour'] - self['oph@start']
+        #self.val_start = self['val start']
+        #self.oph@start = self['oph@start']
         # for compatibility
 
     def _save(self):
         try:
-            self._info['last_fetch_date'] = self._last_fetch_date
-            self._info['Validation Engine'] = self['IB Project Name']
-            self._info['val start'] = arrow.get(
-                self['val start']).format('YYYY-MM-DD')
+            _info = { 'last_fetch_date' : self._last_fetch_date }
+            #self._info['Validation Engine'] = self['IB Project Name']
+            #self._info['val start'] = arrow.get(
+            #    self['val start']).format('YYYY-MM-DD')
             with open(self._infofile, 'w') as f:
-                json.dump(self._info, f)
+                json.dump(_info, f)
+                #json.dump(self._info, f)
         except FileNotFoundError:
             errortext = f'Cound not write to File {self._infofile}.'
             logging.error(errortext)
@@ -404,10 +435,10 @@ class Engine:
         >>> e.get_data('properties','nothing') == None
         True
         """
-        return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})['value']
+        return self.assetdata.get(item, None) if key == 'nokey' else self.assetdata[key].setdefault(item, {'value': None})['value']
 
     def get_keyItem_data(self, key, item):
-        return self.asset.get(item, None) if key == 'nokey' else self.asset[key].setdefault(item, {'value': None})
+        return self.assetdata.get(item, None) if key == 'nokey' else self.assetdata[key].setdefault(item, {'value': None})
 
     def get_property(self, item):
         """
@@ -705,7 +736,7 @@ class Engine:
 
     #         # Add Values from _cyclic to dloc
     #         # add Count_OpHour
-    #         #value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph_start for a in ts_list]
+    #         #value_list = [_cyclic['Count_OpHour'].iloc[_cyclic['time'].values.searchsorted(a)] - self.oph@start for a in ts_list]
     #         #dloc['oph_parts'] = value_list
             
     #         # add Count_OpHour
@@ -1122,19 +1153,19 @@ class Engine:
         dm = pd.DataFrame(messages)
         return dm
 
-    @ property
-    def oph_parts(self):
-        """
-        Oph since Validation Start
-        """
-        return int(self['Count_OpHour'] - self['oph@start'])
+    # @ property
+    # def oph_parts(self):
+    #     """
+    #     Oph since Validation Start
+    #     """
+    #     return int(self['Count_OpHour'] - self['oph@start'])
     
-    @ property
-    def starts_parts(self):
-        """
-        Starts since Validation Start
-        """
-        return int(self['Count_Starts'] - self['starts@start'])
+    # @ property
+    # def starts_parts(self):
+    #     """
+    #     Starts since Validation Start
+    #     """
+    #     return int(self['Count_Starts'] - self['starts@start'])
 
     @ property
     def properties(self):
@@ -1142,7 +1173,7 @@ class Engine:
         properties dict
         e.g.: prop = e.properties
         """
-        return self.asset['properties']
+        return self.assetdata['properties']
 
     @ property
     def dataItems(self):
@@ -1150,7 +1181,7 @@ class Engine:
         dataItems dict
         e.g.: dataItems = e.dataItems
         """
-        return self.asset['dataItems']
+        return self.assetdata['dataItems']
 
     @ property
     def valstart_ts(self):
@@ -1250,15 +1281,15 @@ class Engine:
         """
         return int(str(self['Engine Type'][-2:]))
 
-    @ property
-    def P_nominal(self):
-        """
-        Nominal electrical Power in [kW]
-        """
-        try:
-            return np.around(float(self['Power_PowerNominal']), decimals=0)
-        except:
-            return 0.0
+    # @ property
+    # def P_nominal(self):
+    #     """
+    #     Nominal electrical Power in [kW]
+    #     """
+    #     try:
+    #         return np.around(float(self['Power_PowerNominal']), decimals=0)
+    #     except:
+    #         return 0.0
 
     @ property
     def cos_phi(self):
@@ -1291,7 +1322,8 @@ class Engine:
         """
         Nominal, Calculated mechanical Power in [kW]
         """
-        return np.around(self.P_nominal / self.Generator_Efficiency, decimals=1)
+        return np.around(self['Power_PowerNominal'] / self.Generator_Efficiency, decimals=1)
+        #return np.around(self.P_nominal / self.Generator_Efficiency, decimals=1)
 
     @ property
     def Speed_nominal(self):
@@ -1322,14 +1354,14 @@ class Engine:
         _dash['Engine Type'] = self['Engine Type']
         _dash['Engine Version'] = self['Engine Version']
         _dash['P'] = self.Cylinders
-        _dash['P_nom'] = self.Pmech_nominal
+        _dash['P_nom'] = self['Power_PowerNominal']
         _dash['BMEP'] = self.BMEP
         _dash['serialNumber'] = self['serialNumber']
         _dash['id'] = self['id']
         _dash['Count_OpHour'] = self['Count_OpHour']
-        _dash['val start'] = pd.to_datetime(self['val start'], format='%Y-%m-%d')
+        _dash['val start'] = self['val start']
         _dash['oph@start'] = self['oph@start']
-        _dash['oph parts'] = self.oph_parts
+        _dash['oph parts'] = self['oph_parts']
         _dash['LOC'] = self['RMD_ListBuffMAvgOilConsume_OilConsumption']
         return _dash
 
