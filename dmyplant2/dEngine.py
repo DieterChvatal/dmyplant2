@@ -98,7 +98,7 @@ class Engine:
             eng['oph@start'],
             eng['starts@start'] if 'starts@start' in eng else 0,
             eng['Old Parts first replaced OPH'] if 'Old Parts first replaced OPH' in eng else None,
-            eng['Old Parts replaced before upgrade'] if 'Old Parts replaced before upgrade' in eng else None,)
+            eng['Old Parts replaced before upgrade'] if 'Old Parts replaced before upgrade' in eng else None)
 
     def __init__(self, mp, sn=None, n=None, name=None, valstart = None, oph_start=None, start_start=None, 
         Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
@@ -117,32 +117,17 @@ class Engine:
         if not all([sn!= None,name!= None,valstart!= None,oph_start!= None,start_start!=None]):
             raise ValueError('Engine Constructor - missing parameters')
 
-         
-        # temp.valstart = pd.to_datetime(valstart,infer_datetime_format=True)
-        # temp.eng = {
-        #         'n': n,
-        #         'Validation Engine': name,
-        #         'serialNumber': int(sn),
-        #         'val start': valstart,
-        #         'oph@start': int(oph_start),
-        #         'starts@start': int(start_start),
-        #         'Old Parts first replaced OPH': Old_Parts_first_replaced_OPH,
-        #         'Old Parts replaced before upgrade': Old_Parts_replaced_before_upgrade
-        #     }
-
         # take engine Myplant Serial Number from Validation Definition
         self._mp = mp
-        #self._eng = eng
-        #self._sn = str(temp.eng['serialNumber'])
         self._sn = str(sn)
         self._name = name
         self._data_base = os.getcwd() + f'/data/{str(self._sn)}'
         if not os.path.exists(self._data_base):
             os.makedirs(self._data_base)        
-        #fname = os.getcwd() + self._data_base + '/' + self._sn
         self._picklefile = self._fname + '.pkl'    # load persitant data
         self._infofile = self._fname + '.json'
         self._last_fetch_date = None
+
 
         # load info json & lastfetchdate
         try:

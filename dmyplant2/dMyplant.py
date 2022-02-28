@@ -57,7 +57,8 @@ errortext = {
     401: 'The supplied authentication is invalid',
     403: 'No permission to access this resource',
     404: 'No data was found',
-    500: 'Internal Server Error'
+    500: 'Internal Server Error',
+    504: 'Gateway Timeout'
 }
 
 
@@ -249,7 +250,7 @@ class MyPlant:
             return res
         else:
             logging.error(
-                f' Code: {url}, {response.status_code}, {errortext[response.status_code]}')
+                f"Code: {url}, {response.status_code}, {errortext.get(response.status_code,'no HTTP Error text available.')}")
 
     def _asset_data(self, serialNumber):
         """
