@@ -14,12 +14,17 @@ import arrow
 import warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
-class MyPlantException(Exception):
-    pass
 
-class temp:
-    valstart = None
-    eng = None
+# class MyPlantException(Exception):
+#     pass
+
+# class temp:
+#     valstart = None
+#     eng = None
+
+#################################
+# Engine Class
+#################################
 class Engine:
     """
     Class to encapsulate Engine properties & methods
