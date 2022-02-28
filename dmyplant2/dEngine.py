@@ -21,10 +21,6 @@ warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 # class temp:
 #     valstart = None
 #     eng = None
-
-#################################
-# Engine Class
-#################################
 class Engine:
     """
     Class to encapsulate Engine properties & methods
