@@ -376,6 +376,7 @@ class Engine:
         # for compatibility
         self['oph_start'] = self['oph@start']
         self['starts_start'] = self['starts@start']
+        self['val_start'] = self['val start']
         #self.serialNumber = self['serialNumber']
         #self.id = self['id']
 
@@ -384,7 +385,6 @@ class Engine:
         self._name = self['Name']
         self['Validation Engine'] = self._name
         self['oph_parts'] = self['Count_OpHour'] - self['oph@start']
-        #self.val_start = self['val start']
         #self.oph@start = self['oph@start']
         # for compatibility
 
