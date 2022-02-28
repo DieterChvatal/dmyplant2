@@ -32,6 +32,8 @@ from bokeh.models import ColumnDataSource, Div
 from dmyplant2.dReliability import demonstrated_reliability_sr
 import dmyplant2
 
+d_figsize = (8,6) 
+
 def _idx(n, s, e, x):
     return int(n * (x - s) / (e - s)+1)
 
@@ -257,6 +259,7 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True
     #     print("Key: {}, value: {}".format(entry[0], entry[1]))
 
     fig, ax = plt.subplots(*args, **kwargs)
+    fig.patch.set_facecolor('white')
 
     axes = [ax]
     ax.tick_params(axis='x', labelrotation=30)
@@ -343,7 +346,48 @@ def chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True
     labs = [l.get_label() for l in lns]
     if legend:
         axes[0].legend(lns, labs, loc=0)
+    return fig, ax, axes
 
+def add_lines(start, lines, ax, *args, **kwargs):
+    ax.axvline(arrow.get(start).shift(seconds=0).datetime, *args, **kwargs)
+    for l in lines:
+        ax.axvline(arrow.get(start).shift(seconds=l).datetime, *args, **kwargs)
+
+def add_table(summary, ax, *args, **kwargs):
+    """
+    available options for loc:
+    best, upper right, upper left, lower left, lower right, center left, center right
+    lower center, upper center, center, top right,top left, bottom left, bottom right
+    right, left, top, bottom
+    """
+    ax.table(
+        cellText=summary.values, 
+        colWidths=[0.1]*len(summary.columns),
+        colLabels=summary.columns,
+        cellLoc='center', 
+        rowLoc='center',
+        *args, **kwargs)
+        #loc='upper left')
+
+def _plot(idf, x12='datetime', y1 = ['Various_Values_SpeedAct'], y2 = ['Power_PowerAct'], ylim2=(0,5000), *args, **kwargs):
+    ax = idf[[x12] + y1].plot(
+    x=x12,
+    y=y1,
+    kind='line',
+    grid=True, 
+    *args, **kwargs)
+
+    ax2 = idf[[x12] + y2].plot(
+    x=x12,
+    y=y2,
+    secondary_y = True,
+    ax = ax,
+    kind='line', 
+    grid=True, 
+    *args, **kwargs)
+
+    ax2.set_ylim(ylim2)
+    return ax, ax2, idf
 
 def scatter_chart(d, ys, x='datetime', title=None, grid=True, legend=True, notebook=True, *args, **kwargs):
     """Generate Diane like chart with multiple axes
@@ -392,6 +436,7 @@ def scatter_chart(d, ys, x='datetime', title=None, grid=True, legend=True, noteb
     #     print("Key: {}, value: {}".format(entry[0], entry[1]))
 
     fig, ax = plt.subplots(*args, **kwargs)
+    fig.patch.set_facecolor('white')
 
     axes = [ax]
     ax.tick_params(axis='x', labelrotation=30)
@@ -482,7 +527,7 @@ def scatter_chart(d, ys, x='datetime', title=None, grid=True, legend=True, noteb
     #if legend:
     #    axes[0].legend(lns, labs, loc=0)
 
-def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(10,7), *args, **kwargs):
+def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=d_figsize, *args, **kwargs):
     """wrapper function for bokeh_chart from Johannes""" 
     if notebook: output_notebook(hide_banner=True)
     if title: title = str(title)
@@ -492,7 +537,7 @@ def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=
     fig = bokeh_chart(source, pltcfg, x, x_ax_unit, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
     show(fig)
 
-def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=(10,7), *args, **kwargs):
+def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=d_figsize, *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:
@@ -634,10 +679,10 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
             #if not pd.Series(col).isin(dataitems.myPlantName).any(): ### instead of comparing with dataitems compare with source
             if col not in source.data: ### instead of comparing with dataitems compare with source
                 to_remove.append(col)
-                print (col +' not available! Please check spelling! Not plotted!')
+                logging.info(f"{col} not available! Please check spelling! Not plotted!")
             elif source.data[col].all()==None: #remove of columns if no measurement taken
                 to_remove.append(col)
-                print (col +' not measured! Can´t be plotted!')
+                logging.info(f"{col} not measured! Can´t be plotted!")
         y['col'] = [e for e in y['col'] if e not in to_remove] #remove elements not contained in dataframe by assigning new list
         if len(y['col'])==0: #jump to next iteration if no col remaining
             continue
@@ -708,7 +753,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
 
     return p
 
-def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='circle', x_range=None, y_range=None, figsize=(10,7), *args, **kwargs):
+def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='circle', x_range=None, y_range=None, figsize=d_figsize, *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:
