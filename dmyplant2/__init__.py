@@ -6,4 +6,13 @@ from dmyplant2.dValidation import Validation, HandleID
 from dmyplant2.JFBokeh_Validation_DashBoard import ValidationDashboard
 from dmyplant2.dEngine import Engine
 import dmyplant2.dReliability
-from dmyplant2.dPlot import demonstrated_Reliabillity_Plot, chart, add_lines, add_table, _plot, scatter_chart, bokeh_chart, dbokeh_chart
+from dmyplant2.dPlot import (
+    demonstrated_Reliabillity_Plot, 
+    chart, 
+    add_lines, 
+    add_dbokeh_lines ,
+    add_table,
+    _plot,
+    scatter_chart,
+    bokeh_chart,
+    dbokeh_chart)
