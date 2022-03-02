@@ -535,7 +535,7 @@ def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=
         if not 'unit' in col: col['unit'] = ''
     source = ColumnDataSource(source)   
     fig = bokeh_chart(source, pltcfg, x, x_ax_unit, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
-    show(fig)
+    return fig
 
 def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=d_figsize, *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
@@ -622,11 +622,12 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
     show(p)
     """
 
-    dpi = 80
+    dpi = 66
     mwidth = figsize[0] * dpi
     mheight = figsize[1] * dpi
 
-    dataitems=pd.read_csv('data/dataitems.csv', sep=';')
+    #dataitems=pd.read_csv('data/dataitems.csv', sep=';')
+    dataitems=dmyplant2.MyPlant.get_dataitems()
 
     TOOLS = 'pan, box_zoom, xwheel_zoom, box_select, undo, reset, save' #select Tools to display
     colors = cycle(matplotlib.rcParams['axes.prop_cycle']) #colors to use for plot

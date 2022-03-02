@@ -74,10 +74,14 @@ def have_internet():
 
 class MyPlant:
 
+    #Class Variables
     _name = ''
     _password = ''
     _session = None
     _caching = 0
+
+    _dfn = 'data/dataitems.pkl'
+    _dataitems = pd.DataFrame([])
 
     def __init__(self, caching=0):
         """MyPlant Constructor"""
@@ -93,11 +97,30 @@ class MyPlant:
             self._password = cred['password']
         except FileNotFoundError:
             raise
-        if not os.path.isfile('data/dataitems.csv'):
+
+        #if not os.path.isfile('data/dataitems.csv'):
+        if not os.path.isfile(self._dfn):
             self.create_request_csv()
+
+        # store dataitems in class variable at start
+        self.load_dataitems()        
 
     def del_Credentials(self):
             os.remove("./data/.credentials")
+
+    @ classmethod
+    def load_dataitems(cls):
+        try:
+            with open(cls._dfn, 'rb') as handle:
+                cls._dataitems = pickle.load(handle)
+        except FileNotFoundError:
+            cls._dataitems = pd.DataFrame([])
+
+    @ classmethod
+    def get_dataitems(cls):
+        if cls._dataitems.empty:
+            cls.load_dataitems()
+        return cls._dataitems 
 
     @ classmethod
     def load_dataitems_csv(cls, filename):
@@ -375,11 +398,8 @@ class MyPlant:
     def create_request_csv(self):
         """Create Request_csv with id, name, unit, myPlantName and save in /data"""
         
-        try:
-            model=self.fetchdata('/model/J-Engine')
-            dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
-        except:
-            raise
+        model=self.fetchdata('/model/J-Engine')
+        dataitems=self.fetchdata('/system/localization?groups=data-items&groupResult=true')
 
         model=pd.json_normalize(model, record_path =['dataItems'])
 
@@ -397,7 +417,8 @@ class MyPlant:
         dataitems_df['dataitem']=dataitems_df.dataitem.apply(remove_jen)
         model=model.merge(dataitems_df[dataitems_df.lan=='en'], how='inner', left_on='name', right_on='dataitem')
         model=model.loc[:,['id', 'name', 'unit', 'myPlantName']]
-        model.to_csv('data/dataitems.csv', sep=';', index=False)
+        #model.to_csv('data/dataitems.csv', sep=';', index=False)
+        model.to_pickle(self._dfn)
 
     def _reshape_asset(self, rec):
         ret = dict()
