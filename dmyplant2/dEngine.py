@@ -499,7 +499,8 @@ class Engine:
             pass
 
     def hist_data(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
-                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, forceReload=False, debug=False, userfunc=None):
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, 
+                  forceReload=False, debug=False, userfunc=None, silent=False):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
@@ -564,7 +565,7 @@ class Engine:
             np_to = arrow.get(p_to).shift(seconds=-timeCycle)
             if np_from.to('Europe/Vienna') < np_to.to('Europe/Vienna'):
                 ndf = self._mp.hist_data(
-                    self['id'], itemIds, np_from, p_to, timeCycle)
+                    self['id'], itemIds, np_from, p_to, timeCycle, silent=silent)
 
                 # 2022-02-19 pandas Deprecation warning: use pd.concat instead of append.
                 #df = df.append(ndf)

@@ -305,7 +305,7 @@ class MyPlant:
         df = pd.DataFrame(ds['data'], columns=ds['labels'])
         return df
 
-    def hist_data(self, id, itemIds, p_from, p_to, timeCycle=3600):
+    def hist_data(self, id, itemIds, p_from, p_to, timeCycle=3600, silent=False):
         """
         url: /asset/{assetId}/dataitem/{dataItemId}
         Parameters:
@@ -327,7 +327,9 @@ class MyPlant:
         except:
             print('Please check arrow version! Make sure you have version 1.0.3 or higher installed!')
             print('Update arrow by writing in command prompt: pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org arrow==1.0.3')
-        pbar = tqdm(total=rows_total, ncols=80, mininterval=1, unit=' datarows', desc="Load Data")
+    
+        if not silent:
+            pbar = tqdm(total=rows_total, ncols=80, mininterval=1, unit=' datarows', desc="Load Data")
 
         # initialize loop
         lp_from = int(p_from.timestamp()) * 1000  # Start at lp_from
@@ -343,12 +345,15 @@ class MyPlant:
             #df = df.append(ldf) # 2022-02-19: deprecation warning => use concat in future!
             df = pd.concat([df, ldf])
             
-            pbar.update(rows_per_request)
+            if not silent:
+                pbar.update(rows_per_request)
             # calculate next cycle
             lp_from = lp_to + timeCycle * 1000
             lp_to = min((lp_to + rows_per_request *
                         timeCycle * 1000), int(p_to.timestamp()) * 1000)
-        pbar.close()
+        
+        if not silent:
+            pbar.close()
         # Addtional Datetime column calculated from timestamp
         df['datetime'] = pd.to_datetime(df['time'] * 1000000)
         return df
