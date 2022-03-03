@@ -9,8 +9,9 @@ import dmyplant2.dReliability
 from dmyplant2.dPlot import (
     demonstrated_Reliabillity_Plot, 
     chart, 
-    add_lines, 
-    add_dbokeh_lines ,
+    add_vlines, 
+    add_dbokeh_vlines,
+    add_dbokeh_hlines,
     add_table,
     _plot,
     scatter_chart,
