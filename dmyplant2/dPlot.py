@@ -26,7 +26,7 @@ from bokeh.plotting import figure, output_file, show
 from bokeh.models import LinearAxis, Range1d, DataRange1d, HoverTool
 from bokeh.core.validation import check_integrity
 from bokeh.layouts import column, row, gridplot, layout
-from bokeh.models import ColumnDataSource, Div
+from bokeh.models import ColumnDataSource, Div, Span
 
 # Load Application imports
 from dmyplant2.dReliability import demonstrated_reliability_sr
@@ -353,6 +353,11 @@ def add_lines(start, lines, ax, *args, **kwargs):
     for l in lines:
         ax.axvline(arrow.get(start).shift(seconds=l).datetime, *args, **kwargs)
 
+def add_dbokeh_lines(start, lines, fig, *args, **kwargs):
+    fig.add_layout(Span(location=start + pd.Timedelta(value=0,unit='sec'),dimension='height', *args, **kwargs))
+    for l in lines:
+        fig.add_layout(Span(location=start + pd.Timedelta(value=l,unit='sec'),dimension='height', *args, **kwargs))   
+
 def add_table(summary, ax, *args, **kwargs):
     """
     available options for loc:
@@ -647,27 +652,13 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
     x_axis_label=(f'{x_ax} [{x_unit}]')
 
     if (x_ax == 'datetime'): #seperate constructors for object for datetime or no datetime x-axis
-        p = figure(
-        plot_width=mwidth,
-        plot_height=mheight,
-        x_axis_label=None,#'datetime',
-        x_axis_type='datetime',
-        x_range=x_range,
-        y_range=y_range,
-        tools=TOOLS
-        )
+        p = figure( plot_width=mwidth, plot_height=mheight, x_axis_label=None, x_axis_type='datetime',
+        x_range=x_range, y_range=y_range, tools=TOOLS )
     else:
-        p = figure(
-            plot_width=mwidth,
-            plot_height=mheight,
-            x_axis_label=x_axis_label,
-            tools=TOOLS,
-            x_range=x_range,
-            y_range=y_range
-        )
+        p = figure( plot_width=mwidth, plot_height=mheight, x_axis_label=x_axis_label,
+            tools=TOOLS, x_range=x_range, y_range=y_range)
 
-    if grid==False:
-        p.grid.grid_line_color = None
+    if grid==False: p.grid.grid_line_color = None
         
     p.yaxis.visible = False
     if x_ax=='datetime':
@@ -680,10 +671,10 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
             #if not pd.Series(col).isin(dataitems.myPlantName).any(): ### instead of comparing with dataitems compare with source
             if col not in source.data: ### instead of comparing with dataitems compare with source
                 to_remove.append(col)
-                logging.info(f"{col} not available! Please check spelling! Not plotted!")
-            elif source.data[col].all()==None: #remove of columns if no measurement taken
+                logging.info(f"{col} not found.")
+            elif source.data[col].all() == None: #remove of columns if no measurement taken
                 to_remove.append(col)
-                logging.info(f"{col} not measured! Can´t be plotted!")
+                logging.info(f"{col} not available")
         y['col'] = [e for e in y['col'] if e not in to_remove] #remove elements not contained in dataframe by assigning new list
         if len(y['col'])==0: #jump to next iteration if no col remaining
             continue
@@ -750,7 +741,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
         pass
 
     p.title.text = str(title)
-    p.title.text_font_size = '20px' 
+    p.title.text_font_size = '16px' 
 
     return p
 
