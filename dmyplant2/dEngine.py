@@ -110,7 +110,9 @@ class Engine:
         self._mp = mp
         self._sn = str(sn)
         self._name = name
-        self._data_base = os.getcwd() + f'/data/{str(self._sn)}'
+        self._data_basedir = os.getcwd() + f'/data'
+        self._data_base = os.getcwd() + self._data_basedir + f'/{str(self._sn)}'
+        #self._data_base = os.getcwd() + f'/data/{str(self._sn)}'
         if not os.path.exists(self._data_base):
             os.makedirs(self._data_base)        
         self._picklefile = self._fname + '.pkl'    # load persitant data
@@ -579,40 +581,6 @@ class Engine:
             return df
         except:
             raise ValueError("Engine hist_data Error")
-
-    # def scan_for_highres_DataFrames(self, dat):
-    #     df = pd.DataFrame([])
-    #     alarms = self.batch_hist_alarms(
-    #         p_from=arrow.get(self.val_start).to('Europe/Vienna'),
-    #         p_to=arrow.get(self.val_start).to('Europe/Vienna').shift(months=3)
-    #     )
-    #     alarms = alarms[(alarms['name'] == '1232') |
-    #                     (alarms['name'] == '1231')]
-    #     for i, row in enumerate(alarms[['name', 'message', 'datetime']][::-1].values):
-    #         print(row)
-    #         df = df.append(
-    #             self.hist_data(
-    #                 dat,
-    #                 p_from=arrow.get(
-    #                     row[2], 'MM-DD-YYYY HH:mm').shift(minutes=-10),
-    #                 p_to=arrow.get(
-    #                     row[2], 'MM-DD-YYYY HH:mm').shift(minutes=10),
-    #                 timeCycle=1,
-    #                 slot=i+1))
-    #     return df
-
-    # def fetch_dataItems(self, ts, items):
-    #     itemIds = self.get_dataItems(items)
-    #     tdj = ','.join([str(s) for s in itemIds])
-    #     url=fr"/asset/{self['id']}/history/batchdata?assetType=J-Engine&from={ts}&to={ts}&dataItemIds={tdj}&timeCycle=30"
-    #     data =  self._mp.fetchdata(url)
-    #     # restructure data to dict
-    #     ds = {}
-    #     ds['labels'] = ['timestamp'] + [itemIds[x][0] for x in data['columns'][1]]
-    #     ds['data'] = [[r[0]] + [rr[0] for rr in r[1]] for r in [data['data'][0]]]
-    #     # import to Pandas DataFrame
-    #     df = pd.DataFrame(ds['data'], columns=ds['labels'])
-    #     return df
 
     def fetch_dataItems(self, ts, items):
         itemIds = self.get_dataItems(items)

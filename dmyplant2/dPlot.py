@@ -282,6 +282,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
     p.add_tools(HoverTool(tooltips=tooltips, 
                         formatters={f'@datetime': 'datetime'}, # use 'datetime' formatter for '@date' field    
                         mode='mouse'))  # mode=vline -> display a tooltip whenever the cursor is vertically in line with a glyph
+    p.toolbar.active_drag = p.select_one('BoxZoomTool')
     p.toolbar.active_scroll = p.select_one('WheelZoomTool')
 
     p.legend.click_policy='hide' #hides graph when you click on legend, other option mute (makes them less visible)
