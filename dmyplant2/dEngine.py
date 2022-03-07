@@ -110,8 +110,7 @@ class Engine:
         self._mp = mp
         self._sn = str(sn)
         self._name = name
-        self._data_basedir = os.getcwd() + f'/data'
-        self._data_base = os.getcwd() + self._data_basedir + f'/{str(self._sn)}'
+        self._data_base = os.getcwd() + f'/data/{str(self._sn)}'
         #self._data_base = os.getcwd() + f'/data/{str(self._sn)}'
         if not os.path.exists(self._data_base):
             os.makedirs(self._data_base)        

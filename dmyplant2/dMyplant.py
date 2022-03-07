@@ -88,6 +88,8 @@ class MyPlant:
         if not have_internet():
             raise Exception("Error, Check Internet Connection!")
 
+        self._data_basedir = os.getcwd() + f'/data'
+
         self._caching = caching
         # load and manage credentials from hidden file
         try:
