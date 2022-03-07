@@ -65,6 +65,11 @@ class Validation:
     _val = None
     _engines = []
 
+    @classmethod
+    def from_dval(cls, mp, dval, lengine=Engine, eval_date=None, cui_log=False):
+
+        return cls(mp,dval, lengine, eval_date, cui_log)
+
     def __init__(self, mp, dval, lengine=Engine, eval_date=None, cui_log=False):
         """ Myplant Validation object
             collects and provides the engines list.
@@ -74,6 +79,7 @@ class Validation:
         """
         self._mp = mp
         self._val = dval
+
         self._now_ts = datetime.now().timestamp()
         self._eval_ts = self._now_ts if not eval_date else eval_date
         self._valstart_ts = dval['val start'].min()
@@ -332,3 +338,30 @@ class Validation:
         #     print()
         
         return dtripped
+
+
+if __name__ == "__main__":
+    
+    import pandas as pd
+    import numpy as np
+    import os
+    import dmyplant2
+
+    test = [
+        "n;Validation Engine;serialNumber;val start;oph@start;starts@start;Asset ID",
+        "0;POLYNT - 2 (1145166-T241) --> Sept;1145166;12.10.2020;31291;378;103791",
+        "1;REGENSBURG;1175579;14.09.2020;30402;1351;106622",
+        "2;ROCHE PENZBERG KWKK;1184199;27.04.2020;25208;749;108532"
+        ]
+    with open('temp.csv', 'w') as f:
+        for line in test:
+            f.write(line + '\n')
+
+    dval = dmyplant2.Validation.load_def_csv("temp.csv")
+    print(dval)
+    dmyplant2.cred()
+    mp = dmyplant2.MyPlant(600)
+    vl = dmyplant2.Validation.from_dval(mp,dval, cui_log=False) 
+    d = vl.dashboard
+    print(d.T)   
+    os.remove('temp.csv')
