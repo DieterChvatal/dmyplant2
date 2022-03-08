@@ -16,4 +16,7 @@ from dmyplant2.dPlot import (
     _plot,
     scatter_chart,
     bokeh_chart,
-    dbokeh_chart)
+    dbokeh_chart,
+    bokeh_show)
+from dmyplant2.dFSM import FSM, msgFSM
+from dmyplant2.dFSMPlot import FSMPlot_Start

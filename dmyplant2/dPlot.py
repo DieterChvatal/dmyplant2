@@ -22,7 +22,7 @@ import matplotlib.dates as dates
 
 #Bokeh imports
 from bokeh.io import push_notebook, show, output_notebook
-from bokeh.plotting import figure, output_file, show
+from bokeh.plotting import figure, output_file, show as bokeh_show
 from bokeh.models import LinearAxis, Range1d, DataRange1d, HoverTool
 from bokeh.core.validation import check_integrity
 from bokeh.layouts import column, row, gridplot, layout
