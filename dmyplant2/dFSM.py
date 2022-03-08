@@ -389,7 +389,7 @@ class msgFSM:
         if msg['name'] == '1227 Service selector switch Automatic'[:4]:
             self.act_service_selector = 'AUTO'
 
-    def _fsm_Operating_Cycle(self, actstate, newstate, switch_point, duration, msg):
+    def _fsm_Operating_Cycle(self, actstate, act_transition_time, newstate, new_transition_time, duration, msg):
         def _to_sec(time_object):
             return float(time_object.seconds) + float(time_object.microseconds) / 1e6
         # Start Preparatio => the Engine ist starting
@@ -400,7 +400,7 @@ class msgFSM:
                 'index':self._starts_counter,
                 'success': False,
                 'mode':self.act_service_selector,
-                'starttime': switch_point,
+                'starttime': new_transition_time,
                 'endtime': pd.Timestamp(0),
                 'cumstarttime': pd.Timedelta(0),
                 'alarms': [],
@@ -415,6 +415,7 @@ class msgFSM:
         elif self._in_operation == 'on': # and actstate != FSM.initial_state:
             self._timer = self._timer + duration
             self._starts[-1][actstate] = _to_sec(duration) #if actstate != 'targetoperation' else duration.round('S')
+            self._starts[-1][actstate+'_time'] = act_transition_time #if actstate != 'targetoperation' else duration.round('S')
             if actstate != 'targetoperation':
                 self._starts[-1]['cumstarttime'] = _to_sec(self._timer)
 
@@ -426,11 +427,11 @@ class msgFSM:
         if self.current_state == 'standstill': #'mode-off'
         #if actstate == 'loadramp': # übergang von loadramp to 'targetoperation'
             if self._in_operation == 'on':
-                self._starts[-1]['endtime'] = switch_point
+                self._starts[-1]['endtime'] = new_transition_time
             self._in_operation = 'off'
             self._timer = pd.Timedelta(0)
 
-        _logtxt = f"{switch_point.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):>10.1f}s {_to_sec(self._timer):>10.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>6} => {self.current_state:<20}"
+        _logtxt = f"{new_transition_time.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):>10.1f}s {_to_sec(self._timer):>10.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>6} => {self.current_state:<20}"
         #_logtxt = f"{switch_point.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):8.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>4} => {self.current_state:<20}"
         self._runlog.append(_logtxt)
 
@@ -445,14 +446,14 @@ class msgFSM:
                 self._starts[-1]['warnings'].append({'state':self.current_state, 'msg': msg})
         if self.current_state != actstate:
             # Timestamp at the time of switching states
-            switch_ts = pd.to_datetime(float(msg['timestamp'])*1e6)
+            transition_time = pd.to_datetime(float(msg['timestamp'])*1e6)
             # How long have i been in actstate ?
-            d_ts = pd.Timedelta(switch_ts - self.last_ts) if self.last_ts else pd.Timedelta(0)
+            d_ts = pd.Timedelta(transition_time - self.last_ts) if self.last_ts else pd.Timedelta(0)
             # Summ all states durations and store the timestamp for next pereriod.
             self.states[actstate].dt = d_ts
-            self.last_ts = switch_ts
             # state machine for service Selector Switch
-            self._fsm_Operating_Cycle(actstate, self.current_state, switch_ts, d_ts, msg)
+            self._fsm_Operating_Cycle(actstate, self.last_ts, self.current_state, transition_time, d_ts, msg)
+            self.last_ts = transition_time
 
     def detect_edge_right(self, data, name, startversuch=pd.DataFrame([]), right=None):
         right = startversuch['endtime'] if not startversuch.empty else right
