@@ -1,4 +1,5 @@
 from cProfile import label
+from cmath import nan
 from decimal import DivisionByZero
 from token import RIGHTSHIFT
 import arrow
@@ -176,18 +177,16 @@ class msgFSM:
 
         if frompickle and os.path.exists(self.pfn):
             with open(self.pfn, 'rb') as handle:
-                _start_temp = pickle.load(handle)
-                # hier muss noch geprüft werden, ob das picklefile valide ist
-                # sonst gibts schwer zu entdeckende Fehler :-(
-                # z.B.: tauchen neu hinzugefügte states nicht in den Ergebnissen auf ...
-                self._starts = _start_temp
-                #self.__dict__ = pickle.load(handle)
+                sd = pickle.load(handle)
+                self._starts = sd['starts']
+                self.states = sd['states']
 
     def store(self):
+        sd = {'starts': self._starts, 'states': self.states }
         self.unstore()
         with open(self.pfn, 'wb') as handle:
-            pickle.dump(self._starts, handle, protocol=4)
-            #pickle.dump(self.__dict__, handle, protocol=4)
+            pickle.dump(sd, handle, protocol=4)
+            #pickle.dump(self._starts, handle, protocol=4)
 
     def unstore(self):
         if os.path.exists(self.pfn):
@@ -227,7 +226,9 @@ class msgFSM:
             p_timeCycle = 30
         ts_from = ts_from or self.first_message 
         ts_to = ts_to or self.last_message 
-        return engine.hist_data(
+        #return engine.hist_data(
+        # changed to hist_data2 8.3.2022 - Dieter
+        return engine.hist_data2(
             itemIds = engine.get_dataItems(p_data or self._data_spec),
             p_from = arrow.get(ts_from).to('Europe/Vienna'),
             p_to = arrow.get(ts_to).to('Europe/Vienna'),
@@ -329,7 +330,9 @@ class msgFSM:
             if (t1 - t0) < min_length * 1e3:
                 t1 = int(t0 + min_length * 1e3)
         data = self._load_reduced_data(startversuch, t0, t1, pdata=p_data)
-        return data[(data['time'] >= t0) & (data['time'] <= t1)]
+        if not data.empty:
+            data = data[(data['time'] >= t0) & (data['time'] <= t1)]
+        return data
 
     ## plotting
     def states_lines(self, startversuch):
@@ -423,6 +426,7 @@ class msgFSM:
         if self.current_state == 'startpreparation':
             # apends a new record to the Starts list.
             self._starts.append({
+                'run2':False,
                 'index':self._starts_counter,
                 'success': False,
                 'mode':self.act_service_selector,
@@ -430,7 +434,9 @@ class msgFSM:
                 'endtime': pd.Timestamp(0),
                 'cumstarttime': pd.Timedelta(0),
                 'alarms': [],
-                'warnings': []
+                'warnings': [],
+                'maxload': np.nan,
+                'ramprate': np.nan
             })
             self._starts_counter += 1 # index for next start
             # indicate a 
@@ -535,16 +541,12 @@ class msgFSM:
                 ii = startversuch['index']
                 index_list.append(ii)
 
-                if not 'maxload' in startversuch:
+                if not startversuch['run2']:
 
                     data = self.get_cycle_data2(startversuch, max_length=None, min_length=None, cycletime=1, silent=True)
 
                     if not data.empty:
 
-                        # pl = self.detect_edge(data, 'Power_PowerAct', kind='left')
-                        # pr = self.detect_edge(data, 'Power_PowerAct', kind='right')
-                        # sl = self.detect_edge(data, 'Various_Values_SpeedAct', kind='left')
-                        # sr = self.detect_edge(data, 'Various_Values_SpeedAct', kind='right')
                         pl, _ = self.detect_edge_left(data, 'Power_PowerAct', startversuch)
                         pr, _ = self.detect_edge_right(data, 'Power_PowerAct', startversuch)
                         sl, _ = self.detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
@@ -582,6 +584,10 @@ class msgFSM:
                             except ZeroDivisionError as err:
                                 logging.warning(f"calc_ramp: {str(err)}")
                                 calc_ramp = np.NaN
+                            # doppelte Hosenträger ... hier könnte man ein wenig aufräumen :-)
+                            if not np.isfinite(calc_ramp) :
+                                calc_ramp = np.NaN
+
                             backup_cumstarttime = np.cumsum(svdf['FSM'])['loadramp']
                             calc_cumstarttime = np.cumsum(svdf['RUN2'])['loadramp']
                         svdf = pd.concat([
@@ -603,14 +609,13 @@ class msgFSM:
                         self._starts[ii]['cumstarttime'] = calc_cumstarttime
 
                         self._starts[ii]['backup'] = backup
-                        self._starts[ii]['count_alarms'] = len(startversuch['alarms'])
-                        self._starts[ii]['count_warnings'] = len(startversuch['warnings'])
+                        self._starts[ii]['run2'] = True
 
         return pd.DataFrame([self._starts[s] for s in index_list])
 
     ## FSM Entry Point.
     def run1(self, enforce=False):
-        if len(self._starts) == 0 or enforce:
+        if len(self._starts) == 0 or enforce or not ('run2' in self._starts[0]):
             self._starts = []
             self._starts_counter = 0
             for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
@@ -636,8 +641,10 @@ class msgFSM:
                         self.full_load_timestamp = int(msg['timestamp']) + self._default_ramp_duration
                 # Datensammlung
                 self._collect_data(actstate, msg)
+            for startversuch in self._starts:
+                startversuch['count_alarms'] = len(startversuch['alarms'])
+                startversuch['count_warnings'] = len(startversuch['warnings'])
 
-    
     ## Resultate aus einem FSM Lauf ermitteln.
     def disp_result(self, startversuch):
         summary = pd.DataFrame(startversuch[self.filters['run2filter_content']+ self.filters['filter_alarms_and_warnings']]).T
@@ -679,7 +686,8 @@ class msgFSM:
     def _pareto(self, mm):
         unique_res = set([msg['name'] for msg in mm])
         res = [{ 'anz': len([msg for msg in mm if msg['name'] == m]),
-                 'name':m,
+                 'severity': mm[0]['severity'],
+                 'number':m,
                  'msg':f"{str([msg['message'] for msg in mm if msg['name'] == m][0]):>}"
                 } for m in unique_res]
         return sorted(res, key=lambda x:x['anz'], reverse=True)        

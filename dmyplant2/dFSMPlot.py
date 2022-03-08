@@ -4,7 +4,7 @@ import bokeh
 from bokeh.models import Span, Text, Label
 from dmyplant2 import dbokeh_chart, bokeh_show, add_dbokeh_vlines, add_dbokeh_hlines
 
-def FSMPlot_Start(fsm,startversuch, vset, dset):
+def FSMPlot_Start(fsm,startversuch, vset, dset, figsize=(16,10)):
     von_dt=pd.to_datetime(startversuch['starttime']); von=int(von_dt.timestamp())
     bis_dt=pd.to_datetime(startversuch['endtime']); bis=int(bis_dt.timestamp())
 
@@ -17,15 +17,6 @@ def FSMPlot_Start(fsm,startversuch, vset, dset):
     data = fsm.get_cycle_data2(startversuch, max_length=None, min_length=None, cycletime=1, silent=False, p_data=vset)
     #fsm._debug(int(startversuch['starttime'].timestamp() * 1000),int(startversuch['endtime'].timestamp() * 1000),data,'data')
 
-    # dset = [
-    #     {'col':['Power_PowerAct'], 'ylim':(0,5000), 'color':'red'},
-    #     {'col':['Various_Values_SpeedAct'],'ylim': [0, 2500], 'color':'blue'},
-    #     {'col':['Hyd_PressCrankCase'],'ylim': [-100, 100], 'color':'orange'},
-    #     {'col':['Hyd_PressOilDif'],'ylim': [0, 2], 'color':'black'},
-    #     {'col':['Hyd_PressOil'],'ylim': [0, 10], 'color':'brown'},
-    #     {'col':['Hyd_TempOil'],'ylim': [0, 110], 'color':'#2171b5'}
-    # ]
-
     pl, _ = fsm.detect_edge_left(data, 'Power_PowerAct', startversuch)
     pr, _ = fsm.detect_edge_right(data, 'Power_PowerAct', startversuch)
     sl, _ = fsm.detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
@@ -33,7 +24,8 @@ def FSMPlot_Start(fsm,startversuch, vset, dset):
     #fsm.disp_result(startversuch)
     al_lines = fsm.disp_alarms(startversuch)
     w_lines = fsm.disp_warnings(startversuch)
-    fig = dbokeh_chart(data, dset, title=ftitle, grid=False, figsize=(16,10), style='line', line_width=0)
+    fig = dbokeh_chart(data, dset, title=ftitle, grid=False, figsize=figsize, style='line', line_width=0)
+
     add_dbokeh_vlines(al_lines,fig,line_color='purple', line_dash='dashed', line_alpha=1, line_width=2)
     add_dbokeh_vlines(w_lines,fig,line_color='brown', line_dash='dashed', line_alpha=1, line_width=2)
     add_dbokeh_vlines(fsm.states_lines(startversuch),fig,line_color='red', line_dash='solid', line_alpha=0.4)
@@ -50,4 +42,5 @@ def FSMPlot_Start(fsm,startversuch, vset, dset):
         if startversuch['maxload'] == startversuch['maxload']:
             fig.add_layout(Span(location=startversuch['maxload'],dimension='width',x_range_name='default', y_range_name='0',line_color='red', line_dash='solid', line_alpha=0.4)) 
     fig.add_layout(Span(location=1500,dimension='width',x_range_name='default', y_range_name='1',line_color='blue', line_dash='solid', line_alpha=0.4)) 
-    bokeh_show(fig)
+
+    return fig

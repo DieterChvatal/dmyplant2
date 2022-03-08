@@ -106,7 +106,8 @@ class ValidationDashboard:
             endtime=endtime.to('Europe/Vienna')
 
             print ('Downloading data for '+title)
-            df = eng.hist_data(
+            #df = eng.hist_data(
+            df = eng.hist_data2(     # changed 8.3.2022 - Dieter
                     itemIds=dat,
                     p_from=starttime,
                     p_to=endtime,

@@ -581,6 +581,105 @@ class Engine:
         except:
             raise ValueError("Engine hist_data Error")
 
+###########################################
+#improved hist_data ? Dieter, 8.3.2022
+
+    def hist_data2(self, itemIds={161: ['CountOph', 'h']}, p_limit=None, p_from=None, p_to=None, timeCycle=86400,
+                  assetType='J-Engine', includeMinMax='false', forceDownSampling='false', slot=0, 
+                  forceReload=False, debug=False, userfunc=None, silent=False):
+        """
+        Get pandas dataFrame of dataItems history, either limit or From & to are required
+        ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
+        p_limit             number of datapoints back from "now".
+        p_from              string from iso date or timestamp,
+        p_to                string stop iso date or timestamp.
+        timeCycle           int64  interval in seconds.
+        assetType           string default 'J-Engine'
+        includeMinMax       string 'false'
+        forceDownSampling   string 'false'
+        slot                int     dataset differentiator, defaults to 0
+        forceReload         bool    force reload of data from Myplant, defaults to False
+        """
+
+        def collect_info():
+            # File Metadata
+            info = self._info
+            info['p_from'] = p_from
+            info['p_to'] = p_to
+            info['Timezone'] = 'Europe/Vienna'
+            info['timeCycle'] = timeCycle
+            info['Exported_By'] = self._mp.username
+            info['Export_Date'] = arrow.now().to(
+                'Europe/Vienna').format('DD.MM.YYYY - HH:mm')
+            info['dataItems'] = itemIds
+            return pd.DataFrame.from_dict(info)
+
+        def check_and_loadfile(p_from, fn, itemIds, forceReload):
+            ldf = pd.DataFrame([])
+            last_p_to = p_from
+            if forceReload:
+                if os.path.exists(fn):
+                    os.remove(fn)
+            if os.path.exists(fn):
+                try:
+                    dinfo = pd.read_hdf(fn, "info").to_dict()
+                    # alt: wenn die daten im file den angeforderten daten entsprechen ...
+                    #if set(itemIds) == set(dinfo['dataItems']):
+                    
+                    # neu: wenn die angeforderten Daten im File vorhanden sind, itemIds auf dInfo setzen und die im File vorhandenen Daten ergänzen...
+                    if all([k in dinfo['dataItems'].keys() for k in itemIds ]):
+                        itemIds = dinfo['dataItems']
+                    ###########################################################    
+                        ffrom = list(dinfo['p_from'].values())[0]
+                        if ffrom.to('Europe/Vienna') <= p_from.to('Europe/Vienna'):
+                            ldf = pd.read_hdf(fn, "data")
+                            os.remove(fn)
+                            # Check last lp_to in the file and update the file ....
+                            last_p_to = arrow.get(
+                                list(ldf['time'][-2:-1])[0]).to('Europe/Vienna')
+                            # list(ldf['time'][-2:-1])[0] + timeCycle)
+                            # new starting point ...
+                            if debug:
+                                print(f"\nitemIds: {set(itemIds)}, Shape={ldf.shape}, from: {p_from.format('DD.MM.YYYY - HH:mm')}, to:   {last_p_to.format('DD.MM.YYYY - HH:mm')}, loaded from {fn}")
+                except:
+                    pass
+            return ldf, last_p_to, itemIds
+
+        try:
+            # make sure itemids have the format { int: [str,str], int: [str,str], ...}
+            itemIds = { int(k):v for (k,v) in itemIds.items() }
+            
+            df = pd.DataFrame([])
+            fn = self._fname + fr"_{timeCycle}_{int(slot):02d}.hdf"
+            df, np_from, itemIds = check_and_loadfile(p_from, fn, itemIds, forceReload)
+
+            np_to = arrow.get(p_to).shift(seconds=-timeCycle)
+            if np_from.to('Europe/Vienna') < np_to.to('Europe/Vienna'):
+                ndf = self._mp.hist_data(
+                    self['id'], itemIds, np_from, p_to, timeCycle, silent=silent)
+
+                # 2022-02-19 pandas Deprecation warning: use pd.concat instead of append.
+                #df = df.append(ndf)
+                df = pd.concat([df,ndf])
+
+                if debug:
+                    print(f"\nitemIds: {set(itemIds)}, Shape={ndf.shape}, from: {np_from.format('DD.MM.YYYY - HH:mm')}, to:   {p_to.format('DD.MM.YYYY - HH:mm')}, added to {fn}")
+
+            df.reset_index(drop=True, inplace=True)
+
+            dinfo = collect_info()
+            dinfo.to_hdf(fn, "info", complevel=6)
+            df.to_hdf(fn, "data", complevel=6)
+            if userfunc:
+                print("Calling user defined function...")
+                df = userfunc(df)
+
+            return df
+        except:
+            raise ValueError("Engine hist_data2 Error")
+
+###########################################
+
     def fetch_dataItems(self, ts, items):
         itemIds = self.get_dataItems(items)
         tdj = ','.join([str(s) for s in itemIds])
@@ -596,7 +695,7 @@ class Engine:
                               assetType='J-Engine', includeMinMax='false', forceDownSampling='false'):
         """
         Get pandas dataFrame of dataItems history, either limit or From & to are required
-        DEPRECATED- please use hist_data instead.
+        DEPRECATED- please use hist_data2 instead.
 
         ItemIds             dict   e.g. {161: ['CountOph','h']}, dict of dataItems to query.
         limit               int64, number of points to download
@@ -777,7 +876,8 @@ class Engine:
         ans1=datastr_to_dict(locdef)
         locdef=ans1[0]
         try:
-            dloc = self.hist_data(
+#            dloc = self.hist_data(
+            dloc = self.hist_data2(
                 itemIds=locdef, p_from=starttime,
                 p_to=endtime, timeCycle=3600, slot=1)
             dloc.rename(columns = ans1[1], inplace = True)
@@ -1138,6 +1238,12 @@ class Engine:
         e.g.: vs = e.valstart_ts
         """
         return epoch_ts(arrow.get(self['val start']).timestamp())
+
+
+    def myplant_workbench_link(self, ts, interval, dset):
+        link_url = 'https://myplant.io'
+        items = ','.join([str(v[0]) for v in dset.values()])
+        return fr'<a href="{link_url}/#/fleet/workbench?q={ts - interval * 1000}-{ts + interval * 1000}|{id}-{items}">link to Myplant Workbench</a>' 
 
     ############################
     #Calculated & exposed values

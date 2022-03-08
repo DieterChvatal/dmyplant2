@@ -32,8 +32,6 @@ from bokeh.models import ColumnDataSource, Div, Span
 from dmyplant2.dReliability import demonstrated_reliability_sr
 import dmyplant2
 
-d_figsize = (8,6) 
-
 def _idx(n, s, e, x):
     return int(n * (x - s) / (e - s)+1)
 
@@ -85,7 +83,7 @@ def _plot(idf, x12='datetime', y1 = ['Various_Values_SpeedAct'], y2 = ['Power_Po
     ax2.set_ylim(ylim2)
     return ax, ax2, idf
 
-def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=d_figsize, *args, **kwargs):
+def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, notebook=True, figsize=(8,6), *args, **kwargs):
     """wrapper function for bokeh_chart from Johannes""" 
     if notebook: output_notebook(hide_banner=True)
     if title: title = str(title)
@@ -95,7 +93,7 @@ def dbokeh_chart(source, pltcfg, x='datetime', x_ax_unit=None, title=None, grid=
     fig = bokeh_chart(source, pltcfg, x, x_ax_unit, title, grid, legend, style, x_range, y_range, figsize, *args, **kwargs)
     return fig
 
-def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=d_figsize, *args, **kwargs):
+def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='line', x_range=None, y_range=None, figsize=(8,6), *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:
@@ -299,7 +297,7 @@ def bokeh_chart(source, pltcfg, x_ax='datetime', x_ax_unit=None, title=None, gri
 
     return p
 
-def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='circle', x_range=None, y_range=None, figsize=d_figsize, *args, **kwargs):
+def bokeh_chart_engine_comparison(source, pltcfg, variable, eng_names, x_ax='datetime', x_ax_unit=None, title=None, grid=True, legend=True, style='circle', x_range=None, y_range=None, figsize=(8,6), *args, **kwargs):
     """Generate interactive Diane like chart with multiple axes
 
     Args:

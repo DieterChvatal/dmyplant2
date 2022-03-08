@@ -271,15 +271,15 @@ class Validation:
             raise ValueError(f'Engine {name} not found in Validation Engines')
 
 
-    # def eng_serialNumber(self, serialNumber):
-    #     """
-    #     Return the Engines containing Name Validation
-    #     """
-    #     try:
-    #         return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
-    #     except:
-    #         raise ValueError(
-    #             f'Engine SN {serialNumber} not found in Validation Engines')
+    def eng_serialNumber(self, serialNumber):
+        """
+        Return the Engines containing Name Validation
+        """
+        try:
+            return [e for e in self._engines if str(serialNumber) == str(e.serialNumber)][0]
+        except:
+            raise ValueError(
+                f'Engine SN {serialNumber} not found in Validation Engines')
 
 
     def quick_report(self):
