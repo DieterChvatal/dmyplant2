@@ -28,6 +28,7 @@ def FSMPlot_Start(fsm,startversuch, vset, dset, figsize=(16,10)):
 
     add_dbokeh_vlines(al_lines,fig,line_color='purple', line_dash='dashed', line_alpha=1, line_width=2)
     add_dbokeh_vlines(w_lines,fig,line_color='brown', line_dash='dashed', line_alpha=1, line_width=2)
+
     add_dbokeh_vlines(fsm.states_lines(startversuch),fig,line_color='red', line_dash='solid', line_alpha=0.4)
                             
     #fsm run 2 results
