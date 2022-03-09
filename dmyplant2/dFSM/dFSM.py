@@ -37,17 +37,6 @@ class State:
                 return transf['new-state']
         return self._name
 
-    # def _to_sec(self, time_object):
-    #     return float(time_object.seconds) + float(time_object.microseconds) / 1e6
-
-    # @property
-    # def dt(self):
-    #     return self._to_sec(self._dt)
-
-    # @dt.setter
-    # def dt(self, value):
-    #     self._dt = value
-
 # dataClass FSM
 class FSM:
     initial_state = 'standstill'
@@ -80,7 +69,11 @@ class FSM:
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                 ]),             
             'targetoperation': State('targetoperation',[
+                { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
+                ]),
+            'rampdown': State('rampdown',[
                 { 'trigger':'1236 Generator CB opened', 'new-state':'coolrun'},
+                { 'trigger':'1231 Request module on', 'new-state':'targetoperation'},
                 ]),
             'coolrun': State('coolrun',[
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
@@ -107,7 +100,9 @@ class FSM:
 
 
 class filterFSM:
-    run2filter_content = ['index','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun','count_alarms', 'count_warnings']
+    run2filter_content = ['no','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','rampdown','coolrun','count_alarms', 'count_warnings']
+    vertical_lines_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','rampdown','coolrun']
+
 
 class msgFSM:
     def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False):
@@ -120,17 +115,17 @@ class msgFSM:
 
         # Filters
         self.filters = {
-            'vertical_lines_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','coolrun'],
+            #'vertical_lines_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','rampdown','coolrun'],
             'filter_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','coolrun'],
             'run2filter_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun'],
             'filter_content': ['success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','targetoperation','coolrun','count_alarms','count_warnings'],
-            'run2filter_content':['index','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun','count_alarms', 'count_warnings'],
+            'run2filter_content':['no','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun','count_alarms', 'count_warnings'],
             'filter_period':['starttime','endtime']
         }
         #self.vertical_lines_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp']
         #self.filter_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime']
         #self.filter_content = ['success','mode'] + self.filter_times + ['targetoperation']
-        #self.run2filter_content = ['index','success','mode'] + self.filter_times + ['index','maxload','ramp','targetoperation']
+        #self.run2filter_content = ['no','success','mode'] + self.filter_times + ['no','maxload','ramp','targetoperation']
         #self.filter_alarms_and_warnings = ['count_alarms', 'count_warnings']
         #self.filter_period = ['starttime','endtime']
 
@@ -338,7 +333,7 @@ class msgFSM:
         Returns:
             list: list of pd.Timestamps, ready to be passed into add_bokeh_vlinees
         """
-        sv_lines = [v for v in startversuch[self.filters['vertical_lines_times']] if v==v]
+        sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times] if v==v]
         start = startversuch['starttime']; lines=list(np.cumsum(sv_lines)); 
         return [start + pd.Timedelta(value=v,unit='sec') for v in [0] + lines]
 
@@ -362,7 +357,7 @@ class msgFSM:
             # apends a new record to the Starts list.
             self._starts.append({
                 'run2':False,
-                'index':self._starts_counter,
+                'no':self._starts_counter,
                 'success': False,
                 'mode':self.act_service_selector,
                 'starttime': new_transition_time,
@@ -380,10 +375,15 @@ class msgFSM:
             self._timer = pd.Timedelta(0)
         elif self._in_operation == 'on': # and actstate != FSM.initial_state:
             self._timer = self._timer + duration
-            self._starts[-1][actstate] = _to_sec(duration) #if actstate != 'targetoperation' else duration.round('S')
+
+            if actstate in self._starts[-1]: # add all duration a start is in a certain state ( important if the engine switches back and forth between states, e.g. Forsa Hartmoor M4, 18.1.2022 fff)
+                self._starts[-1][actstate] += _to_sec(duration)
+            else:
+                self._starts[-1][actstate] = _to_sec(duration) #if actstate != 'targetoperation' else duration.round('S')
+            
             self._starts[-1]['timing']['start_'+ actstate] = act_transition_time #if actstate != 'targetoperation' else duration.round('S')
             self._starts[-1]['timing']['end_'+ actstate] = new_transition_time #if actstate != 'targetoperation' else duration.round('S')
-            if actstate not in ['targetoperation','coolrun']: 
+            if actstate not in ['targetoperation','rampdown','coolrun']: 
                 self._starts[-1]['cumstarttime'] = _to_sec(self._timer)
 
         if self.current_state == 'targetoperation':
@@ -428,8 +428,8 @@ class msgFSM:
             transition_time = pd.to_datetime(float(msg['timestamp'])*1e6)
             # How long have i been in actstate ?
             d_ts = pd.Timedelta(transition_time - self.last_ts) if self.last_ts else pd.Timedelta(0)
-            self._fsm_Operating_Cycle(actstate, self.last_ts, self.current_state, transition_time, d_ts, msg)
             self.last_ts = transition_time
+            self._fsm_Operating_Cycle(actstate, self.last_ts, self.current_state, transition_time, d_ts, msg)
 
     def detect_edge_right(self, data, name, startversuch=pd.DataFrame([]), right=None):
         right = startversuch['endtime'] if not startversuch.empty else right
@@ -500,13 +500,13 @@ class msgFSM:
                         #sr, _ = self.detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
 
                         self._starts[ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
-                        #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in self.filters['vertical_lines_times']]}
-                        sv_lines = [v for v in startversuch[self.filters['vertical_lines_times']]]
+                        #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in filterFSM.vertical_lines_times]}
+                        sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times]]
                         start = startversuch['starttime'];
                         
                         # lade die in run1 gesammelten Daten in ein DataFrame, ersetze NaN Werte mit 0
                         backup = {}
-                        svdf = pd.DataFrame(sv_lines, index=self.filters['vertical_lines_times'], columns=['FSM'], dtype=np.float64).fillna(0)
+                        svdf = pd.DataFrame(sv_lines, index=filterFSM.vertical_lines_times, columns=['FSM'], dtype=np.float64).fillna(0)
                         svdf['RUN2'] = svdf['FSM']
 
                         # intentionally excluded - Dieter 1.3.2022

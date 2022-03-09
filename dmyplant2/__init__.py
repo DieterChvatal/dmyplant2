@@ -18,5 +18,4 @@ from dmyplant2.dPlot import (
     bokeh_chart,
     dbokeh_chart,
     bokeh_show)
-from dmyplant2.dFSM import FSM, msgFSM, filterFSM
-from dmyplant2.dFSMPlot import FSMPlot_Start
+from dmyplant2.dFSM import FSM, msgFSM, filterFSM, FSMPlot_Start
