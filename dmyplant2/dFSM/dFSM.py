@@ -1,7 +1,4 @@
-from cProfile import label
-from cmath import nan
 from decimal import DivisionByZero
-from token import RIGHTSHIFT
 import arrow
 import pandas as pd
 import numpy as np
@@ -10,7 +7,6 @@ from tqdm.auto import tqdm
 import os
 import pickle
 from pprint import pformat as pf
-from collections import namedtuple
 import logging
 import dmyplant2
 import warnings
@@ -113,26 +109,8 @@ class msgFSM:
         self._pre_period = 5*60 #sec 'prerun' in data download Start before cycle start event.
         self._post_period = 21*60 #sec 'postrun' in data download Start after cycle stop event.
 
-        # Filters
-        self.filters = {
-            #'vertical_lines_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','rampdown','coolrun'],
-            'filter_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','coolrun'],
-            'run2filter_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun'],
-            'filter_content': ['success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','targetoperation','coolrun','count_alarms','count_warnings'],
-            'run2filter_content':['no','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun','count_alarms', 'count_warnings'],
-            'filter_period':['starttime','endtime']
-        }
-        #self.vertical_lines_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp']
-        #self.filter_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime']
-        #self.filter_content = ['success','mode'] + self.filter_times + ['targetoperation']
-        #self.run2filter_content = ['no','success','mode'] + self.filter_times + ['no','maxload','ramp','targetoperation']
-        #self.filter_alarms_and_warnings = ['count_alarms', 'count_warnings']
-        #self.filter_period = ['starttime','endtime']
-
-        #else:
         self.load_messages(e, p_from, p_to, skip_days)
         self._data_spec = ['Various_Values_SpeedAct','Power_PowerAct']
-        #self.load_data(timecycle = 30)
 
         # Es gibt zwar die message, sie ist aber nicht bei allen Motoren implementiert
         # und wird zumindest in einem Fall (Forsa Hartmoor, M?) nicht 100% zuverlässig geloggt
@@ -163,6 +141,13 @@ class msgFSM:
                 sd = pickle.load(handle)
                 self._starts = sd['starts']
                 self.states = sd['states']
+
+    @property
+    def result(self):
+        for startversuch in self._starts:
+            startversuch['count_alarms'] = len(startversuch['alarms'])
+            startversuch['count_warnings'] = len(startversuch['warnings'])
+        return pd.DataFrame(self._starts)
 
     def store(self):
         sd = {'starts': self._starts, 'states': self.states }
@@ -207,135 +192,6 @@ class msgFSM:
             with open(fn, 'w') as f:
                 for line in self._runlog:
                     f.write(line + '\n')
-    ## data handling
-    def _load_data(self, engine=None, p_data=None, ts_from=None, ts_to=None, p_timeCycle=None, p_forceReload=False, p_slot=99, silent=False):
-        engine = engine or self._e
-        if not p_timeCycle:
-            p_timeCycle = 30
-        ts_from = ts_from or self.first_message 
-        ts_to = ts_to or self.last_message 
-        #return engine.hist_data(
-        # changed to hist_data2 8.3.2022 - Dieter
-        return engine.hist_data2(
-            itemIds = engine.get_dataItems(p_data or self._data_spec),
-            p_from = arrow.get(ts_from).to('Europe/Vienna'),
-            p_to = arrow.get(ts_to).to('Europe/Vienna'),
-            timeCycle=p_timeCycle,
-            forceReload=p_forceReload,
-            slot=p_slot,
-            silent=silent
-        )
-
-    def load_data(self, cycletime, tts_from=None, tts_to=None, silent=False, p_data=None):
-        return self._load_data(p_data=p_data, p_timeCycle=cycletime, ts_from=tts_from, ts_to=tts_to, p_slot=tts_from or 9999, silent=silent)
-
-    def get_period_data(self, ts0, ts1, cycletime=None, p_data=None):
-        lts_from = int(ts0)
-        lts_to = int(ts1)
-        data = self.load_data(cycletime, tts_from=lts_from, tts_to=lts_to, p_data=p_data)
-        data[(data['time'] >= lts_from) & 
-                (data['time'] <= lts_to)]
-        return data
-
-    def get_ts_data(self, tts, left = -300, right = 150, cycletime=None, p_data=None):
-        if not cycletime:
-            cycletime = 1 # default for get_ts_data
-        lts_from = int(tts + left)
-        lts_to = int(tts + right)
-        return self.get_period_data(lts_from, lts_to, cycletime, p_data=p_data)        
-
-    ###################
-    def _resample_data(self, data, startversuch):
-        # bis 15' nach Start 1" samples
-        d1 = startversuch['starttime'] + pd.Timedelta(value=15, unit='min')
-        # bis 15' vor Ende 1" samples
-        d3 = startversuch['endtime'] - pd.Timedelta(value=15, unit='min')
-        
-        if (d3 - d1) > pd.Timedelta(value=5,unit='min'):
-            # dazwischen auf 10' 
-            odata1 = data[data.datetime <= d1]
-            odata2 = data[(data.datetime >= d1) & (data.datetime <= d3)]
-            odata2 = odata2[::10][1:-1]
-            odata3 = data[data.datetime >= d3]
-        return pd.concat([odata1,odata2,odata3]).reset_index(drop='index')
-
-    def get_cycle_data(self,rec, max_length=None, min_length=None, cycletime=None, silent=False, p_data=None, reduce=True):
-        t0 = int(arrow.get(rec['starttime']).timestamp() * 1000 - self._pre_period * 1000)
-        t1 = int(arrow.get(rec['endtime']).timestamp() * 1000 + self._post_period * 1000)
-        if max_length:
-            if (t1 - t0) > max_length * 1e3:
-                t1 = int(t0 + max_length * 1e3)
-        if min_length:
-            if (t1 - t0) < min_length * 1e3:
-                t1 = int(t0 + min_length * 1e3)
-        data = self.load_data(cycletime, tts_from=t0, tts_to=t1, silent=silent, p_data=p_data)
-        #data = self._resample_data(data,rec) if reduce else data
-        data = data[(data['time'] >= t0) & (data['time'] <= t1)]
-        return data
-    #################
-
-    def _debug(self,start, ende, data, dataname):
-        def todate(ts):
-            return pd.to_datetime(ts * 1000000).strftime('%d.%m.%Y %H:%M:%S')
-        print(f"########## debug {dataname } ##########")
-        if not data.empty:
-            print(f"soll: start={todate(start)} end={todate(ende)}")
-            print(f" ist: start={todate(data.iloc[0]['time'])} end={todate(data.iloc[-1]['time'])}")
-            print(f"diff: start={(data.iloc[0]['time']-start) // 1000}s end={(ende - data.iloc[-1]['time']) // 1000}s")
-        else:
-            print(f"soll: start={todate(start)} end={todate(ende)}")
-            print(f"=> empty dataset!!!")
-        print(f"-----------------------------------------")
-
-    def _load_reduced_data(self, startversuch, ptts_from, ptts_to, pdata=None):
-        # Hires 1" von 'starttime' bis 15' danach und von 15' vor 'endtime' bis Ende
-        # dazwischen alle 30" einen Messwert. 
-        data1 = pd.DataFrame([]);data2 = pd.DataFrame([]);data3 = pd.DataFrame([]);
-        d1t = int(arrow.get(startversuch['starttime'] + pd.Timedelta(value=15, unit='min')).timestamp() * 1000)
-        d3t = int(arrow.get(startversuch['endtime'] - pd.Timedelta(value=15, unit='min')).timestamp() * 1000)
-        d3t = max(d3t, ptts_from); d1t = min(d1t,d3t)
-        data1 = self.load_data(cycletime=1, tts_from=ptts_from, tts_to=d1t, silent=True, p_data=pdata)
-        if 'time' in data1:
-            data1 = data1[(data1['time'] >= ptts_from) & (data1['time'] < d1t)]
-        data2 = self.load_data(cycletime=30, tts_from=d1t, tts_to=d3t, silent=True, p_data=pdata)
-        if 'time' in data2:
-            data2 = data2[(data2['time'] >= d1t) & (data1['time'] < d3t)]
-        data3 = self.load_data(cycletime=1, tts_from=d3t, tts_to=ptts_to, silent=True, p_data=pdata)
-        if 'time' in data3:
-            data3 = data3[(data3['time'] >= d3t) & (data3['time'] <= ptts_to)]
-        #self._debug(ptts_from,d1t, data1, 'data1')
-        #self._debug(d1t,d3t, data2, 'data2')
-        #self._debug(d3t,ptts_to,data3, 'data3')
-        return pd.concat([data1,data2,data3]).reset_index(drop='index')
-
-    def get_cycle_data2(self,startversuch, max_length=None, min_length=None, cycletime=None, silent=False, p_data=None):
-        t0 = int(arrow.get(startversuch['starttime']).timestamp() * 1000 - self._pre_period * 1000)
-        t1 = int(arrow.get(startversuch['endtime']).timestamp() * 1000 + self._post_period * 1000)
-        if max_length:
-            if (t1 - t0) > max_length * 1e3:
-                t1 = int(t0 + max_length * 1e3)
-        if min_length:
-            if (t1 - t0) < min_length * 1e3:
-                t1 = int(t0 + min_length * 1e3)
-        data = self._load_reduced_data(startversuch, t0, t1, pdata=p_data)
-        if not data.empty:
-            data = data[(data['time'] >= t0) & (data['time'] <= t1)]
-        return data
-
-    ## plotting
-    def states_lines(self, startversuch):
-        """pd.Timestamp positions of detected state Changes
-        including start-event
-
-        Args:
-            startversuch (self._starts[x]): the selected starts record.
-
-        Returns:
-            list: list of pd.Timestamps, ready to be passed into add_bokeh_vlinees
-        """
-        sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times] if v==v]
-        start = startversuch['starttime']; lines=list(np.cumsum(sv_lines)); 
-        return [start + pd.Timedelta(value=v,unit='sec') for v in [0] + lines]
 
     ### die Finite State Machine selbst:
     #1225 Service selector switch Off
@@ -381,8 +237,9 @@ class msgFSM:
             else:
                 self._starts[-1][actstate] = _to_sec(duration) #if actstate != 'targetoperation' else duration.round('S')
             
-            self._starts[-1]['timing']['start_'+ actstate] = act_transition_time #if actstate != 'targetoperation' else duration.round('S')
-            self._starts[-1]['timing']['end_'+ actstate] = new_transition_time #if actstate != 'targetoperation' else duration.round('S')
+            self._starts[-1]['timing']['start_'+ actstate] = act_transition_time 
+            self._starts[-1]['timing']['end_'+ actstate] = new_transition_time 
+
             if actstate not in ['targetoperation','rampdown','coolrun']: 
                 self._starts[-1]['cumstarttime'] = _to_sec(self._timer)
 
@@ -431,54 +288,43 @@ class msgFSM:
             self.last_ts = transition_time
             self._fsm_Operating_Cycle(actstate, self.last_ts, self.current_state, transition_time, d_ts, msg)
 
-    def detect_edge_right(self, data, name, startversuch=pd.DataFrame([]), right=None):
-        right = startversuch['endtime'] if not startversuch.empty else right
-        ndata = data[data['datetime'] < right].copy() if right != None else data.copy()
-        fac = {'left': -1.0, 'right': 1.0}
-        ldata = ndata[['datetime',name]]
-        x0 = ldata.iloc[0]['datetime'];
-        x1 = ldata.iloc[-1]['datetime'];
-        edge0 = ndata.loc[ndata[name].idxmax()]
-        try:
-            xfac = (x1 - x0) / (x1 - edge0.datetime)
-        except ZeroDivisionError:
-            xfac = 0.0
-        xfac = min(xfac, 150.0)
-        #print(f"###### | xfac: {xfac:5.2f} | kind: {kind:>5} | name: {name}")
-        lmax = ldata.loc[:,name].max() * xfac * 0.90
-        ndata['helpline_right'] = (ndata['datetime'] - x0)*lmax/(x1-x0)
-        ndata[name+'_right'] = ndata[name]+(ndata['datetime'] - x0)*lmax/(x1-x0)
-        Point = namedtuple('edge',["loc", "val"])
-        try:
-            edge = ndata.loc[ndata[name+'_right'].idxmax()]
-        except Exception as err:
-            #logging.error(str(err))
-            edge = ndata.iloc[-1]
-        return  Point(edge.datetime, ldata.at[edge.name,name]), ndata
 
-    def detect_edge_left(self, data, name, startversuch=pd.DataFrame([]), left=None):
-        left = startversuch['starttime'] if not startversuch.empty else left
-        ndata = data[data['datetime'] > left].copy() if left != None else data.copy()
-        ldata = ndata[['datetime',name]]
-        x0 = ldata.iloc[0]['datetime'];
-        x1 = ldata.iloc[-1]['datetime'];
-        edge0 = ndata.loc[ndata[name].idxmax()]
-        try:
-            xfac = (x1 - x0) / (edge0.datetime - x0)
-        except ZeroDivisionError:
-            xfac = 0.0
-        xfac = min(xfac, 20.0)
-        #print(f"###### | xfac: {xfac:5.2f} | left | name: {name}")
-        lmax = ldata.loc[:,name].max() * xfac * 0.90
-        ndata['helpline_left'] = (x0 - ndata['datetime'])*lmax/(x1-x0) + lmax
-        ndata[name+'_left'] = ndata[name]+(x0 - ndata['datetime'])*lmax/(x1-x0) + lmax
-        Point = namedtuple('edge',["loc", "val"])
-        try:
-            edge = ndata.loc[ndata[name+'_left'].idxmax()]
-        except Exception as err:
-            #logging.error(str(err))
-            edge = ndata.iloc[-1]
-        return  Point(edge.datetime, ldata.at[edge.name,name]), ndata
+    def handle_states(self, lactstate, lcurrent_state, msg):
+
+        # Sonderbehandlung Ende der Phase loadramp 
+        if self._target_load_message:
+            new_state = self.states[lcurrent_state].send(msg)  # die Message kommt in den messages vor, normal behandeln
+
+        else: # die 'target load reached' message kommt nicht vor => die Zeit bis Vollast muß in RUN 1 geschätzt werden ...
+            #die FSM hat die Phase 'loadramp' noch nicht erreicht 
+            if self.full_load_timestamp == None or int(msg['timestamp']) < self.full_load_timestamp:
+                new_state = self.states[lcurrent_state].send(msg)
+            elif int(msg['timestamp']) >= self.full_load_timestamp: # now switch to 'targetoperation'
+                dmsg = {'name':'9047', 'message':'Target load reached (calculated)','timestamp':self.full_load_timestamp,'severity':600}
+                new_state = self.states[lcurrent_state].send(dmsg)
+                # Inject the message , collect the data
+                self._collect_data(lactstate, dmsg)
+                # rest the algorithm for the next cycle.
+                self.full_load_timestamp = None
+                lactstate = lcurrent_state
+
+            # Algorithm to switch from 'loadramp to' 'targetoperation'
+            # direkt bein Umschalten das Ende der Rampe berechnen
+            if lcurrent_state == 'loadramp' and self.full_load_timestamp == None:  
+                self.full_load_timestamp = int(msg['timestamp']) + self._default_ramp_duration
+
+        return lactstate, new_state
+
+
+    ## FSM Entry Point.
+    def run1(self, enforce=False):
+        if len(self._starts) == 0 or enforce or not ('run2' in self._starts[0]):
+            self._starts = []
+            self._starts_counter = 0
+            for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
+                actstate = self.current_state
+                actstate, self.current_state = self.handle_states(actstate, self.current_state, msg)
+                self._collect_data(actstate, msg)
 
     def run2(self, rda):
 
@@ -557,208 +403,3 @@ class msgFSM:
                         self._starts[ii]['run2'] = True
 
         return pd.DataFrame([self._starts[s] for s in index_list])
-
-    ## FSM Entry Point.
-    def run1(self, enforce=False):
-        if len(self._starts) == 0 or enforce or not ('run2' in self._starts[0]):
-            self._starts = []
-            self._starts_counter = 0
-            for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
-
-                ## FSM Motorstart
-                actstate = self.current_state
-
-                # Sonderbehandlung Ende der Lastrampe
-                if self._target_load_message:
-                    self.current_state = self.states[self.current_state].send(msg)
-                else: # berechne die Zeit bis Vollast
-                    if self.full_load_timestamp == None or int(msg['timestamp']) < self.full_load_timestamp:
-                        self.current_state = self.states[self.current_state].send(msg)
-                    elif int(msg['timestamp']) >= self.full_load_timestamp: # now switch to 'targetoperation'
-                        dmsg = {'name':'9047', 'message':'Target load reached (calculated)','timestamp':self.full_load_timestamp,'severity':600}
-                        self.current_state = self.states[self.current_state].send(dmsg)
-                        self._collect_data(actstate, dmsg)
-                        self.full_load_timestamp = None
-                        actstate = self.current_state            
-
-                    # Algorithm to switch from 'loadramp to' 'targetoperation'
-                    if self.current_state == 'loadramp' and self.full_load_timestamp == None:  # direct bein Umschalten das Ende der Rampe berechnen
-                        self.full_load_timestamp = int(msg['timestamp']) + self._default_ramp_duration
-                # Datensammlung
-                self._collect_data(actstate, msg)
-            for startversuch in self._starts:
-                startversuch['count_alarms'] = len(startversuch['alarms'])
-                startversuch['count_warnings'] = len(startversuch['warnings'])
-
-    ## Resultate aus einem FSM Lauf ermitteln.
-    def disp_result(self, startversuch):
-        summary = pd.DataFrame(startversuch[filterFSM.run2filter_content]).T
-        #summary = pd.DataFrame.from_dict({k:v for k,v in dict(startversuch[['index'] + self.filters['run2filter_times']]).items() if v == v}, orient='index').T.round(2)
-        #summary = pd.DataFrame(startversuch[self.filters['run2filter_times']], dtype=np.float64).fillna(0).round(2).T
-        display(HTML(summary.to_html(escape=False, index=False)))
-        #display(HTML('<h3>'+ summary.to_html(escape=False, index=False) + '</h3>'))
-
-    def disp_alarms(self, startversuch):
-        ald = []; alt = []
-        for al in startversuch['alarms']:
-                ald.append({
-                        'state':al['state'],'severity':al['msg']['severity'],'Number':al['msg']['name'],
-                        'date':pd.to_datetime(int(al['msg']['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S'),
-                        'message':al['msg']['message']
-                })
-                alt.append(pd.to_datetime(int(al['msg']['timestamp'])*1e6))
-        aldf = pd.DataFrame(ald)
-        if not aldf.empty:
-            display(HTML(aldf.to_html(escape=False, index=False)))
-            #display(HTML('<h3>'+ aldf.to_html(escape=False, index=False) + '</h3>'))
-        return alt
-
-    def disp_warnings(self, startversuch):
-        wad = []; wat = []
-        for wd in startversuch['warnings']:
-                wad.append({
-                        'state':wd['state'],'severity':wd['msg']['severity'],'Number':wd['msg']['name'],
-                        'date':pd.to_datetime(int(wd['msg']['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S'),
-                        'message':wd['msg']['message']
-                })
-                wat.append(pd.to_datetime(int(wd['msg']['timestamp'])*1e6))
-        wdf = pd.DataFrame(wad)
-        if not wdf.empty:
-            display(HTML(wdf.to_html(escape=False, index=False)))
-            #display(HTML('<h3>'+ wdf.to_html(escape=False, index=False) + '</h3>'))
-        return wat                
-
-    def _pareto(self, mm):
-        unique_res = set([msg['name'] for msg in mm])
-        res = [{ 'anz': len([msg for msg in mm if msg['name'] == m]),
-                 'severity': mm[0]['severity'],
-                 'number':m,
-                 'msg':f"{str([msg['message'] for msg in mm if msg['name'] == m][0]):>}"
-                } for m in unique_res]
-        return sorted(res, key=lambda x:x['anz'], reverse=True)        
-
-    def _states_pareto(self, severity, states = []):
-        rmessages = []
-        if type(states) == str:
-            states = [states]
-        for state in states:
-            rmessages += [msg for msg in self.states[state]._messages if msg['severity'] == severity]
-        return self._pareto(rmessages)
-
-    def alarms_pareto(self, states):
-        return pd.DataFrame(self._states_pareto(800, states))
-
-    def warnings_pareto(self, states):
-        return pd.DataFrame(self._states_pareto(700, states))
-
-    @property
-    def result(self):
-        return pd.DataFrame(self._starts)
-
-    def summary(self):
-        display(HTML(
-            f"""
-            <h2>{str(self._e)}</h2>
-            <br>
-            <table>
-                <thead>
-                    <tr>
-                        <td></td>
-                        <td>From</td>
-                        <td>To</td>
-                        <td>Days</td>
-                    </tr>
-                </thead>
-                <tr>
-                    <td>Interval</td>
-                    <td>{self.first_message:%d.%m.%Y}</td>
-                    <td>{self.last_message:%d.%m.%Y}</td>
-                    <td>{self.period.days:5}</td>
-            </td>
-                </tr>
-            </table>
-            """))
-        nsummary = []
-        res = self.result
-        for mode in ['???','OFF','MANUAL', 'AUTO']:
-            lstarts = res[res['mode'] == mode].shape[0]
-            successful_starts = res[((res.success) & (res['mode'] == mode))].shape[0]
-            nsummary.append([lstarts, successful_starts,(successful_starts / lstarts) * 100.0 if lstarts != 0 else 0.0])
-        nsummary.append([res.shape[0],res[res.success].shape[0],(res[res.success].shape[0] / res.shape[0]) * 100.0])
-        display(HTML(pd.DataFrame(nsummary, index=['???','OFF','MANUAL', 'AUTO','ALL'],columns=['Starts','successful','%'], dtype=np.int64).to_html(escape=False)))
-
-    def summary_out(self):
-        fsum = f"""
-            <table>
-                <thead>
-                    <tr>
-                        <td></td>
-                        <td>From</td>
-                        <td>To</td>
-                        <td>Days</td>
-                    </tr>
-                </thead>
-                <tr>
-                    <td>{self._e['Engine ID']}</td>
-                    <td>{self.first_message:%d.%m.%Y}</td>
-                    <td>{self.last_message:%d.%m.%Y}</td>
-                    <td>{self.period.days:5}</td>
-            </td>
-                </tr>
-            </table>
-            <br>
-            """
-        nsummary = []
-        res = self.result
-        for mode in ['???','OFF','MANUAL', 'AUTO']:
-            lstarts = res[res['mode'] == mode].shape[0]
-            successful_starts = res[((res.success) & (res['mode'] == mode))].shape[0]
-            nsummary.append([lstarts, successful_starts,(successful_starts / lstarts) * 100.0 if lstarts != 0 else 0.0])
-        nsummary.append([res.shape[0],res[res.success].shape[0],(res[res.success].shape[0] / res.shape[0]) * 100.0])
-        display(HTML(fsum + pd.DataFrame(nsummary, index=['???','OFF','MANUAL', 'AUTO','ALL'],columns=['Starts','successful','%'], dtype=np.int64).to_html(escape=False)))
-
-
-# alter Code
-#     def completed(self, limit_to = 10):
-
-#         def filter_messages(messages, severity):
-#             fmessages = [msg for msg in messages if msg['severity'] == severity]
-#             unique_messages = set([msg['name'] for msg in fmessages])
-#             res_messages = [{ 'anz': len([msg for msg in fmessages if msg['name'] == m]), 
-#                               'msg':f"{m} {[msg['message'] for msg in fmessages if msg['name'] == m][0]}"
-#                             } for m in unique_messages]
-#             return len(fmessages), sorted(res_messages, key=lambda x:x['anz'], reverse=True) 
-        
-#         print(f'''
-
-# *****************************************
-# * Ergebnisse (c)2022 Dieter Chvatal     *
-# *****************************************
-# gesamter Zeitraum: {self._period.round('S')}
-
-# ''')
-#         for state in self.states:
-
-#             alarms, alu = filter_messages(self.states[state]._messages, 800)
-#             al = "".join([f"{line['anz']:3d} {line['msg']}\n" for line in alu[:limit_to]])
-
-#             warnings, wru = filter_messages(self.states[state]._messages, 700)
-#             wn = "".join([f"{line['anz']:3d} {line['msg']}\n" for line in wru[:limit_to]])
-
-#             print(
-# f"""
-# {state}:
-# Dauer       : {str(self.states[state].get_duration().round('S')):>20}  
-# Anteil      : {self.states[state].get_duration()/self._whole_period*100.0:20.2f}%
-# Messages    : {len(self.states[state]._messages):20} 
-# Alarms total: {alarms:20d}
-#       unique: {len(alu):20d}
-
-# {al}
-
-# Warnings total: {warnings:20d}
-#         unique: {len(wru):20d}
-
-# {wn}
-# """)
-#         print('completed')

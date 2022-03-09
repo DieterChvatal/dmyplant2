@@ -1,2 +1,11 @@
 from .dFSM import FSM, msgFSM, filterFSM
-from .dFSMPlot import FSMPlot_Start
+from .dFSMResults import (
+    detect_edge_right, 
+    detect_edge_left,
+    disp_result ,
+    disp_alarms, 
+    disp_warnings, 
+    alarms_pareto, 
+    warnings_pareto
+    )
+from .dFSMPlot import FSMPlot_Start, get_cycle_data2, states_lines
