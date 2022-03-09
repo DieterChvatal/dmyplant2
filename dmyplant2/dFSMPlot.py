@@ -30,8 +30,6 @@ def FSMPlot_Start(fsm,startversuch, vset, dset, figsize=(16,10)):
     add_dbokeh_vlines(w_lines,fig,line_color='brown', line_dash='dashed', line_alpha=1, line_width=2)
 
     add_dbokeh_vlines(fsm.states_lines(startversuch),fig,line_color='red', line_dash='solid', line_alpha=0.4)
-    new_lines = [startversuch['starttime']] + [startversuch[k] for k in startversuch.keys() if k.endswith('_time')]
-    add_dbokeh_vlines(new_lines,fig,line_color='green', line_dash='solid', line_alpha=0.4)
                             
     #fsm run 2 results
     lcol='blue'

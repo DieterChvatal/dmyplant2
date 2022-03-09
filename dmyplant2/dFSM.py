@@ -37,16 +37,16 @@ class State:
                 return transf['new-state']
         return self._name
 
-    def _to_sec(self, time_object):
-        return float(time_object.seconds) + float(time_object.microseconds) / 1e6
+    # def _to_sec(self, time_object):
+    #     return float(time_object.seconds) + float(time_object.microseconds) / 1e6
 
-    @property
-    def dt(self):
-        return self._to_sec(self._dt)
+    # @property
+    # def dt(self):
+    #     return self._to_sec(self._dt)
 
-    @dt.setter
-    def dt(self, value):
-        self._dt = value
+    # @dt.setter
+    # def dt(self, value):
+    #     self._dt = value
 
 # dataClass FSM
 class FSM:
@@ -105,6 +105,10 @@ class FSM:
                     f.write(f'    {s.replace("-","")} -> {t["new-state"].replace("-","")} [label="{t["trigger"]}"]\n')
             f.write("}\n")
 
+
+class filterFSM:
+    run2filter_content = ['index','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun','count_alarms', 'count_warnings']
+
 class msgFSM:
     def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False):
         self._e = e
@@ -119,9 +123,8 @@ class msgFSM:
             'vertical_lines_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','coolrun'],
             'filter_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','coolrun'],
             'run2filter_times': ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun'],
-            'filter_content': ['success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','targetoperation','coolrun'],
-            'run2filter_content':['index','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun'],
-            'filter_alarms_and_warnings':['count_alarms', 'count_warnings'],
+            'filter_content': ['success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','targetoperation','coolrun','count_alarms','count_warnings'],
+            'run2filter_content':['index','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','coolrun','count_alarms', 'count_warnings'],
             'filter_period':['starttime','endtime']
         }
         #self.vertical_lines_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp']
@@ -339,44 +342,6 @@ class msgFSM:
         start = startversuch['starttime']; lines=list(np.cumsum(sv_lines)); 
         return [start + pd.Timedelta(value=v,unit='sec') for v in [0] + lines]
 
-    # def plot_cycle(self, rec, max_length=None, cycletime=None, *args, **kwargs):
-    #     t0 = int(arrow.get(rec['starttime']).timestamp() * 1000 - self._pre_period * 1000)
-    #     t1 = int(arrow.get(rec['endtime']).timestamp() * 1000 + self._post_period * 1000)
-    #     if max_length:
-    #         if (t1 - t0) > max_length * 1e3:
-    #             t1 = int(t0 + max_length * 1e3)
-    #     data = self.load_data(cycletime, tts_from=t0, tts_to=t1)
-    #     (ax, ax2, idf) = dmyplant2._plot(
-    #         data[
-    #             (data['time'] >= t0) & 
-    #             (data['time'] <= t1)],        
-    #             *args, **kwargs
-    #         )
-    #     duration = 0.0
-    #     for k in rec[self.filters['vertical_lines_times']].index:
-    #         dtt=rec[k]
-    #         if dtt == dtt:
-    #             ax.axvline(arrow.get(rec['starttime']).shift(seconds=duration).datetime, color="red", linestyle="dotted", label=f"{duration:4.1f}")
-    #             duration = duration + dtt
-    #         else:
-    #             break
-    #     ax.axvline(arrow.get(rec['starttime']).shift(seconds=duration).datetime, color="red", linestyle="dotted", label=f"{duration:4.1f}")
-    #     r_summary = pd.DataFrame(rec[self.filters['filter_times']], dtype=np.float64).round(2).T
-    #     """
-    #     available options for loc:
-    #     best, upper right, upper left, lower left, lower right, center left, center right
-    #     lower center, upper center, center, top right,top left, bottom left, bottom right
-    #     right, left, top, bottom
-    #     """
-    #     plt.table(
-    #         cellText=r_summary.values, 
-    #         colWidths=[0.1]*len(r_summary.columns),
-    #         colLabels=r_summary.columns,
-    #         cellLoc='center', 
-    #         rowLoc='center',
-    #         loc='upper left')
-    #     return idf
-
     ### die Finite State Machine selbst:
     #1225 Service selector switch Off
     #1226 Service selector switch Manual
@@ -403,6 +368,7 @@ class msgFSM:
                 'starttime': new_transition_time,
                 'endtime': pd.Timestamp(0),
                 'cumstarttime': pd.Timedelta(0),
+                'timing': {},
                 'alarms': [],
                 'warnings': [],
                 'maxload': np.nan,
@@ -415,8 +381,9 @@ class msgFSM:
         elif self._in_operation == 'on': # and actstate != FSM.initial_state:
             self._timer = self._timer + duration
             self._starts[-1][actstate] = _to_sec(duration) #if actstate != 'targetoperation' else duration.round('S')
-            self._starts[-1][actstate+'_time'] = act_transition_time #if actstate != 'targetoperation' else duration.round('S')
-            if actstate != 'targetoperation':
+            self._starts[-1]['timing']['start_'+ actstate] = act_transition_time #if actstate != 'targetoperation' else duration.round('S')
+            self._starts[-1]['timing']['end_'+ actstate] = new_transition_time #if actstate != 'targetoperation' else duration.round('S')
+            if actstate not in ['targetoperation','coolrun']: 
                 self._starts[-1]['cumstarttime'] = _to_sec(self._timer)
 
         if self.current_state == 'targetoperation':
@@ -431,10 +398,22 @@ class msgFSM:
             self._in_operation = 'off'
             self._timer = pd.Timedelta(0)
 
-        _logtxt = f"{new_transition_time.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):>10.1f}s {_to_sec(self._timer):>10.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>6} => {self.current_state:<20}"
+        _logline= {
+            'new_transition_time': new_transition_time.strftime('%d.%m.%Y %H:%M:%S'),
+            'actstate': actstate,
+            'duration': _to_sec(duration),
+            '_timer': _to_sec(self._timer),
+            'msg': msg['name'] + ' ' + msg['message'],
+            'starts': len(self._starts),
+            'Successful_starts': len([s for s in self._starts if s['success']]),
+            'operation': self._in_operation,
+            'mode': self.act_service_selector,
+            'currenstate': self.current_state
+        }
+        self._runlog.append(_logline)
+        #_logtxt = f"{new_transition_time.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):>10.1f}s {_to_sec(self._timer):>10.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>6} => {self.current_state:<20}"
         #_logtxt = f"{switch_point.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):8.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>4} => {self.current_state:<20}"
-        self._runlog.append(_logtxt)
-
+        #self._runlog.append(_logtxt)
 
     def _collect_data(self, actstate, msg):
         self._fsm_Service_selector(msg)
@@ -449,9 +428,6 @@ class msgFSM:
             transition_time = pd.to_datetime(float(msg['timestamp'])*1e6)
             # How long have i been in actstate ?
             d_ts = pd.Timedelta(transition_time - self.last_ts) if self.last_ts else pd.Timedelta(0)
-            # Summ all states durations and store the timestamp for next pereriod.
-            self.states[actstate].dt = d_ts
-            # state machine for service Selector Switch
             self._fsm_Operating_Cycle(actstate, self.last_ts, self.current_state, transition_time, d_ts, msg)
             self.last_ts = transition_time
 
@@ -616,7 +592,7 @@ class msgFSM:
 
     ## Resultate aus einem FSM Lauf ermitteln.
     def disp_result(self, startversuch):
-        summary = pd.DataFrame(startversuch[self.filters['run2filter_content']+ self.filters['filter_alarms_and_warnings']]).T
+        summary = pd.DataFrame(startversuch[filterFSM.run2filter_content]).T
         #summary = pd.DataFrame.from_dict({k:v for k,v in dict(startversuch[['index'] + self.filters['run2filter_times']]).items() if v == v}, orient='index').T.round(2)
         #summary = pd.DataFrame(startversuch[self.filters['run2filter_times']], dtype=np.float64).fillna(0).round(2).T
         display(HTML(summary.to_html(escape=False, index=False)))
