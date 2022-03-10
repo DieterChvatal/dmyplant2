@@ -9,6 +9,7 @@ import pickle
 from pprint import pformat as pf
 import logging
 import dmyplant2
+from dmyplant2 import get_cycle_data2, detect_edge_right, detect_edge_left
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 from IPython.display import HTML, display
@@ -331,19 +332,19 @@ class msgFSM:
         index_list = []
         for n, startversuch in tqdm(rda.iterrows(), total=rda.shape[0], ncols=80, mininterval=1, unit=' starts', desc="FSM Run2"):
 
-                ii = startversuch['index']
+                ii = startversuch['no']
                 index_list.append(ii)
 
                 if not startversuch['run2']:
 
-                    data = self.get_cycle_data2(startversuch, max_length=None, min_length=None, silent=True)
+                    data = get_cycle_data2(self, startversuch, max_length=None, min_length=None, silent=True)
 
                     if not data.empty:
 
-                        pl, _ = self.detect_edge_left(data, 'Power_PowerAct', startversuch)
-                        #pr, _ = self.detect_edge_right(data, 'Power_PowerAct', startversuch)
-                        #sl, _ = self.detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
-                        #sr, _ = self.detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
+                        pl, _ = detect_edge_left(data, 'Power_PowerAct', startversuch)
+                        #pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
+                        #sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
+                        #sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
 
                         self._starts[ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
                         #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in filterFSM.vertical_lines_times]}
