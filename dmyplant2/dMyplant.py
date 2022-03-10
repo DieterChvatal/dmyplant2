@@ -29,6 +29,16 @@ def load_json(fil):
     with open(fil, "r", encoding='utf-8-sig') as f:
         return json.load(f)
 
+
+def save_pkl(fil, d):
+    with open(fil, 'wb') as f:
+        pickle.dump(d, f, protocol=4)
+
+def load_pkl(fil):
+    with open(fil, 'rb') as f:
+        return pickle.load(f)
+
+
 def epoch_ts(ts) -> float:
     try:
         if ts >= 10000000000.0:
@@ -462,15 +472,15 @@ class MyPlant:
         'shutdown_counter','Count_OpHour','Power_PowerNominal','Para_Speed_Nominal'
         ]
         fleet = self.fetch_installed_base(fields, properties, dataItems, limit = None)
-        fleet.to_pickle('./data/Installed_base.pkl')
+        fleet.to_pickle(self._data_basedir + '/Installed_base.pkl')
         return fleet
 
     def reload_installed_fleet(self):
         self._fetch_installed_base()
 
     def get_installed_fleet(self):
-        if os.path.exists('./data/Installed_base.pkl'):
-            fleet = pd.read_pickle('./data/Installed_base.pkl')
+        if os.path.exists(self._data_basedir + '/Installed_base.pkl'):
+            fleet = pd.read_pickle(self._data_basedir + '/Installed_base.pkl')
         else:
             fleet= self._fetch_installed_base()
         return fleet

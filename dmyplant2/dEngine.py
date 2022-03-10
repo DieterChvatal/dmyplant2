@@ -3,7 +3,7 @@ import math
 from pprint import pprint as pp
 import pandas as pd
 import numpy as np
-from dmyplant2.dMyplant import epoch_ts, mp_ts, save_json, load_json
+from dmyplant2.dMyplant import epoch_ts, mp_ts, save_json, load_json, save_pkl, load_pkl
 from dmyplant2.dPlot import datastr_to_dict
 import sys
 import os
@@ -40,22 +40,60 @@ class Engine:
         return df.to_dict(orient='records')[0]
 
     @classmethod
+    def _get_validations(cls, sn):
+        vfn = os.getcwd() + '/data/validations.pkl'
+        validations = {}
+        if os.path.exists(vfn):
+            validations = load_pkl(vfn)
+        return validations
+
+    @classmethod
+    def _save_validations(cls, validations):
+        vfn = os.getcwd() + '/data/validations.pkl'
+        save_pkl(vfn, validations)
+
+    @classmethod
     def from_fleet(cls, mp, edf, n=0, name=None, valstart=None, oph_start=None, start_start=None, 
         Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
-        id = int(edf['id'])
-        if not valstart: # take Commissioning date if no valstart date is given.
-            valstart = pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True)
-        valstart = pd.to_datetime(valstart,infer_datetime_format=True)
-        ts = int(valstart.timestamp()*1e3)
-        if not oph_start:
-            oph_start = mp.historical_dataItem(id, 161, ts).get('value', None) or 0
-        if not start_start:
-            start_start = mp.historical_dataItem(id, 179, ts).get('value', None) or 0
-        if not name:
-            name = edf['IB Site Name'] + ' ' + edf['Engine ID']
+        sn = str(edf['serialNumber'])
+        validations = cls._get_validations(sn)
+        if str(sn) in validations:
+            valrec = validation['eng']
+            valstart = pd.to_datetime(valrec['val start'],infer_datetime_format=True)
+            oph_start = valrec['oph@start']
+            start_start = valrec['starts@start']
+            name = valrec['Validation Engine']
+        else:
+            id = int(edf['id'])
+            if not valstart: # take Commissioning date if no valstart date is given.
+                valstart = pd.to_datetime(edf['Commissioning Date'],infer_datetime_format=True)
+            valstart = pd.to_datetime(valstart,infer_datetime_format=True)
+            ts = int(valstart.timestamp()*1e3)
+            if not oph_start: 
+                oph_start = mp.historical_dataItem(id, 161, ts).get('value', None) or 0
+            if not start_start:
+                start_start = mp.historical_dataItem(id, 179, ts).get('value', None) or 0
+            if not name:
+                name = edf['IB Site Name'] + ' ' + edf['Engine ID']            
+
+            valrec = {
+                'source':'from_MyPlant',
+                'eng': {
+                    'Asset ID': id,
+                    'Validation Engine': name,
+                    'n': 999, # ????
+                    'oph@start': oph_start,
+                    'serialNumber': int(sn),
+                    'starts@start': start_start,
+                    'val start': valstart
+                }
+            }
+            validations[sn] = valrec
+            cls._save_validations(validations)
+
         return cls(
             mp, 
-            int(edf['serialNumber']), 
+            int(sn), 
             n, 
             name, 
             valstart.date().strftime('%Y-%m-%d'), 
@@ -78,6 +116,20 @@ class Engine:
 
     @classmethod
     def from_eng(cls, mp, eng):
+        # speichere ValidierungsInfo in einer lokalen Database
+        # zur Nutzung durch die from_sn und from_fleet constructors
+
+        vfn = os.getcwd() + '/data/validations.pkl'
+        validations = {}
+        if os.path.exists(vfn):
+            validations = load_pkl(vfn)
+        if not eng['serialNumber'] in validations:
+            validations[eng['serialNumber']] = {
+                'source': 'from_eng',
+                'eng' : eng
+            }
+            save_pkl(vfn, validations)
+
         return cls(
             mp, 
             eng['serialNumber'], 

@@ -7,12 +7,12 @@ import numpy as np
 import sys
 import logging
 from dmyplant2.dEngine import Engine
-from dmyplant2.dMyplant import MyPlant
+from dmyplant2.dMyplant import MyPlant, load_pkl, save_pkl
 from pprint import pprint as pp
 from scipy.stats.distributions import chi2
 
 import arrow
-from pprint import pprint as pp
+from pprint import pprint as pp, pformat as pf
 from tqdm.auto import tqdm
 from IPython.display import HTML, display
 
@@ -359,8 +359,17 @@ if __name__ == "__main__":
 
     dval = dmyplant2.Validation.load_def_csv("temp.csv")
     print(dval)
+
+    print()
+    vfn = os.getcwd() + '/data/validations.pkl'
+    if os.path.exists(vfn):
+        validations = load_pkl(vfn)
+        print(pf(validations))
+    print()
+
+
     dmyplant2.cred()
-    mp = dmyplant2.MyPlant(600)
+    mp = dmyplant2.MyPlant(7200)
     vl = dmyplant2.Validation.from_dval(mp,dval, cui_log=False) 
     d = vl.dashboard
     print(d.T)   
