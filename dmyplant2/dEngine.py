@@ -58,7 +58,7 @@ class Engine:
         sn = str(edf['serialNumber'])
         validations = cls._get_validations(sn)
         if str(sn) in validations:
-            valrec = validation['eng']
+            valrec = validations[str(sn)]['eng']
             valstart = pd.to_datetime(valrec['val start'],infer_datetime_format=True)
             oph_start = valrec['oph@start']
             start_start = valrec['starts@start']
@@ -123,7 +123,7 @@ class Engine:
         validations = {}
         if os.path.exists(vfn):
             validations = load_pkl(vfn)
-        if not eng['serialNumber'] in validations:
+        if validations and ((not eng['serialNumber'] in validations) or (validations[eng['serialNumber']]['source'] != 'from_eng')):
             validations[eng['serialNumber']] = {
                 'source': 'from_eng',
                 'eng' : eng
@@ -155,7 +155,10 @@ class Engine:
         '1320072'
         """
 
-        if not all([sn!= None,name!= None,valstart!= None,oph_start!= None,start_start!=None]):
+        # if not all([sn!= None,name!= None,valstart!= None,oph_start!= None,start_start!=None]):
+        #     raise ValueError('Engine Constructor - missing parameters')
+
+        if (sn == None or name== None or valstart== None or oph_start== None or start_start==None):
             raise ValueError('Engine Constructor - missing parameters')
 
         # take engine Myplant Serial Number from Validation Definition
