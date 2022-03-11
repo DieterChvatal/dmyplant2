@@ -9,7 +9,6 @@ import pickle
 from pprint import pformat as pf
 import logging
 import dmyplant2
-from dmyplant2 import get_cycle_data2, detect_edge_right, detect_edge_left
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 from IPython.display import HTML, display
@@ -33,6 +32,11 @@ class State:
             if msg['name'] == transf['trigger'][:4]:
                 return transf['new-state']
         return self._name
+
+# SpezialFall Loadram, hier wird ein berechneter Statechange ermittelt.
+class LoadrampState(State):
+    pass
+
 
 # dataClass FSM
 class FSM:
@@ -61,7 +65,7 @@ class FSM:
                 { 'trigger':'1235 Generator CB closed', 'new-state':'loadramp'},                
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                 ]),             
-            'loadramp': State('loadramp',[
+            'loadramp': LoadrampState('loadramp',[
                 { 'trigger':'9047 Target load reached', 'new-state':'targetoperation'},
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                 ]),             
@@ -73,9 +77,20 @@ class FSM:
                 { 'trigger':'1231 Request module on', 'new-state':'targetoperation'},
                 ]),
             'coolrun': State('coolrun',[
+                { 'trigger':'1234 Operation off', 'new-state':'runout'}
+                ]),
+            'runout': State('runout',[
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
-                ])        
+            ])
+            #,         
+            # 'aftercooling': State('aftercooling',[
+            #     { 'trigger':'1260 Demand oil pump off', 'new-state':'standstill'},
+            #     { 'trigger':'1231 Request module on', 'new-state': 'startpreparation'}            
+            # ])         
         }
+
+
+#1260 Demand oil pump off
 
     @classmethod
     def dot(cls, fn):
@@ -97,18 +112,19 @@ class FSM:
 
 
 class filterFSM:
-    run2filter_content = ['no','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','rampdown','coolrun','count_alarms', 'count_warnings']
-    vertical_lines_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','rampdown','coolrun']
+    run2filter_content = ['no','success','mode','startpreparation','starter','hochlauf','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','rampdown','coolrun','runout','count_alarms', 'count_warnings']
+    vertical_lines_times = ['startpreparation','starter','hochlauf','idle','synchronize','loadramp','targetoperation','rampdown','coolrun','runout']
 
 
 class msgFSM:
-    def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False):
+    def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False, successtime=600):
         self._e = e
         self._p_from = p_from
         self._p_to = p_to
         self.pfn = self._e._fname + '_statemachine.pkl'
         self._pre_period = 5*60 #sec 'prerun' in data download Start before cycle start event.
         self._post_period = 21*60 #sec 'postrun' in data download Start after cycle stop event.
+        self._successtime = successtime
 
         self.load_messages(e, p_from, p_to, skip_days)
         self._data_spec = ['Various_Values_SpeedAct','Power_PowerAct']
@@ -133,7 +149,7 @@ class msgFSM:
         self._runlog = []
         self._in_operation = '???'
         self._timer = pd.Timedelta(0)
-        self.last_ts = None
+        self.last_ts = pd.to_datetime('01.01.1970')
         self._starts = []
         self._starts_counter = 0
 
@@ -241,32 +257,36 @@ class msgFSM:
             self._starts[-1]['timing']['start_'+ actstate] = act_transition_time 
             self._starts[-1]['timing']['end_'+ actstate] = new_transition_time 
 
-            if actstate not in ['targetoperation','rampdown','coolrun']: 
+            if actstate not in ['targetoperation','rampdown','coolrun','aftercooling']: 
                 self._starts[-1]['cumstarttime'] = _to_sec(self._timer)
 
-        if self.current_state == 'targetoperation':
-            if self._in_operation == 'on':
-                self._starts[-1]['success'] = True   # wenn der Start bis hierhin kommt, ist er erfolgreich.
+        # if self.current_state == 'targetoperation':
+        #     if self._in_operation == 'on':
+        #         self._starts[-1]['success'] = True   # wenn der Start bis hierhin kommt, ist er erfolgreich.
 
         # Ein Motorlauf(-versuch) is zu Ende. 
         if self.current_state == 'standstill': #'mode-off'
         #if actstate == 'loadramp': # übergang von loadramp to 'targetoperation'
             if self._in_operation == 'on':
                 self._starts[-1]['endtime'] = new_transition_time
+                if 'targetoperation' in self._starts[-1]:
+                    #successful if the targetoperation run was longer than specified
+                    self._starts[-1]['success'] = (self._starts[-1]['targetoperation'] > self._successtime) 
             self._in_operation = 'off'
             self._timer = pd.Timedelta(0)
 
         _logline= {
-            'new_transition_time': new_transition_time.strftime('%d.%m.%Y %H:%M:%S'),
             'actstate': actstate,
+            'start_time': act_transition_time.strftime('%d.%m.%Y %H:%M:%S'),
+            'msg': msg['name'] + ' ' + msg['message'],
+            'currenstate': self.current_state,
+            'new_transition_time': new_transition_time.strftime('%d.%m.%Y %H:%M:%S'),
             'duration': _to_sec(duration),
             '_timer': _to_sec(self._timer),
-            'msg': msg['name'] + ' ' + msg['message'],
             'starts': len(self._starts),
             'Successful_starts': len([s for s in self._starts if s['success']]),
             'operation': self._in_operation,
             'mode': self.act_service_selector,
-            'currenstate': self.current_state
         }
         self._runlog.append(_logline)
         #_logtxt = f"{new_transition_time.strftime('%d.%m.%Y %H:%M:%S')} |{actstate:<18} {_to_sec(duration):>10.1f}s {_to_sec(self._timer):>10.1f}s {msg['name']} {msg['message']:<40} {len(self._starts):>3d} {len([s for s in self._starts if s['success']]):>3d} {self._in_operation:>3} {self.act_service_selector:>6} => {self.current_state:<20}"
@@ -286,8 +306,8 @@ class msgFSM:
             transition_time = pd.to_datetime(float(msg['timestamp'])*1e6)
             # How long have i been in actstate ?
             d_ts = pd.Timedelta(transition_time - self.last_ts) if self.last_ts else pd.Timedelta(0)
-            self.last_ts = transition_time
             self._fsm_Operating_Cycle(actstate, self.last_ts, self.current_state, transition_time, d_ts, msg)
+            self.last_ts = transition_time
 
 
     def handle_states(self, lactstate, lcurrent_state, msg):
@@ -337,11 +357,11 @@ class msgFSM:
 
                 if not startversuch['run2']:
 
-                    data = get_cycle_data2(self, startversuch, max_length=None, min_length=None, silent=True)
+                    data = dmyplant2.get_cycle_data2(self, startversuch, max_length=None, min_length=None, silent=True)
 
                     if not data.empty:
 
-                        pl, _ = detect_edge_left(data, 'Power_PowerAct', startversuch)
+                        pl, _ = dmyplant2.detect_edge_left(data, 'Power_PowerAct', startversuch)
                         #pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
                         #sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
                         #sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)

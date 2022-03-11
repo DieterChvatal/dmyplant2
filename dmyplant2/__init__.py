@@ -1,4 +1,6 @@
-﻿__version__ = "0.0.3"
+﻿# Package wide constants
+__version__ = "0.0.3"
+_validationsfile = '/data/validations.pkl'
 
 from dmyplant2.support import cred
 from dmyplant2.dMyplant import MyPlant, save_json, load_json

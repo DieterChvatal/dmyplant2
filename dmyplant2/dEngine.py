@@ -3,6 +3,7 @@ import math
 from pprint import pprint as pp
 import pandas as pd
 import numpy as np
+from dmyplant2 import _validationsfile
 from dmyplant2.dMyplant import epoch_ts, mp_ts, save_json, load_json, save_pkl, load_pkl
 from dmyplant2.dPlot import datastr_to_dict
 import sys
@@ -21,6 +22,7 @@ class Engine:
     """
     
     _info = {}
+    #_validationsfile = '/data/validations.pkl'
 
     @classmethod
     def lookup_Installed_Fleet(cls, mp, sn):
@@ -40,25 +42,32 @@ class Engine:
         return df.to_dict(orient='records')[0]
 
     @classmethod
-    def _get_validations(cls, sn):
-        vfn = os.getcwd() + '/data/validations.pkl'
+    def _list_cached_validations(cls):
+        vfn = os.getcwd() + _validationsfile
+        if os.path.exists(vfn):
+            validations = load_pkl(vfn)
+            return pd.DataFrame(validations)
+
+    @classmethod
+    def _get_cached_validations(cls, sn):
+        vfn = os.getcwd()  + _validationsfile
         validations = {}
         if os.path.exists(vfn):
             validations = load_pkl(vfn)
         return validations
 
     @classmethod
-    def _save_validations(cls, validations):
-        vfn = os.getcwd() + '/data/validations.pkl'
+    def _save_cached_validations(cls, validations):
+        vfn = os.getcwd() + _validationsfile
         save_pkl(vfn, validations)
 
     @classmethod
     def from_fleet(cls, mp, edf, n=0, name=None, valstart=None, oph_start=None, start_start=None, 
         Old_Parts_first_replaced_OPH=None, Old_Parts_replaced_before_upgrade=None):
         sn = str(edf['serialNumber'])
-        validations = cls._get_validations(sn)
+        validations = cls._get_cached_validations(sn)
         if str(sn) in validations:
-            valrec = validations[str(sn)]['eng']
+            valrec = validations[str(sn)]
             valstart = pd.to_datetime(valrec['val start'],infer_datetime_format=True)
             oph_start = valrec['oph@start']
             start_start = valrec['starts@start']
@@ -77,19 +86,18 @@ class Engine:
                 name = edf['IB Site Name'] + ' ' + edf['Engine ID']            
 
             valrec = {
-                'source':'from_MyPlant',
-                'eng': {
                     'Asset ID': id,
                     'Validation Engine': name,
                     'n': 999, # ????
                     'oph@start': oph_start,
                     'serialNumber': int(sn),
                     'starts@start': start_start,
-                    'val start': valstart
+                    'val start': valstart,
+                    'source':'from_MyPlant'
                 }
-            }
+
             validations[sn] = valrec
-            cls._save_validations(validations)
+            cls._save_cached_validations(validations)
 
         return cls(
             mp, 
@@ -124,10 +132,8 @@ class Engine:
         if os.path.exists(vfn):
             validations = load_pkl(vfn)
         if validations and ((not eng['serialNumber'] in validations) or (validations[eng['serialNumber']]['source'] != 'from_eng')):
-            validations[eng['serialNumber']] = {
-                'source': 'from_eng',
-                'eng' : eng
-            }
+            eng['source'] = 'from_eng'
+            validations[eng['serialNumber']] = eng
             save_pkl(vfn, validations)
 
         return cls(
