@@ -33,6 +33,11 @@ class State:
                 return transf['new-state']
         return self._name
 
+# SpezialFall Loadram, hier wird ein berechneter Statechange ermittelt.
+class LoadrampState(State):
+    pass
+
+
 # dataClass FSM
 class FSM:
     initial_state = 'standstill'
@@ -60,7 +65,7 @@ class FSM:
                 { 'trigger':'1235 Generator CB closed', 'new-state':'loadramp'},                
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                 ]),             
-            'loadramp': State('loadramp',[
+            'loadramp': LoadrampState('loadramp',[
                 { 'trigger':'9047 Target load reached', 'new-state':'targetoperation'},
                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                 ]),             
@@ -112,13 +117,14 @@ class filterFSM:
 
 
 class msgFSM:
-    def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False):
+    def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False, successtime=600):
         self._e = e
         self._p_from = p_from
         self._p_to = p_to
         self.pfn = self._e._fname + '_statemachine.pkl'
         self._pre_period = 5*60 #sec 'prerun' in data download Start before cycle start event.
         self._post_period = 21*60 #sec 'postrun' in data download Start after cycle stop event.
+        self._successtime = successtime
 
         self.load_messages(e, p_from, p_to, skip_days)
         self._data_spec = ['Various_Values_SpeedAct','Power_PowerAct']
@@ -254,15 +260,18 @@ class msgFSM:
             if actstate not in ['targetoperation','rampdown','coolrun','aftercooling']: 
                 self._starts[-1]['cumstarttime'] = _to_sec(self._timer)
 
-        if self.current_state == 'targetoperation':
-            if self._in_operation == 'on':
-                self._starts[-1]['success'] = True   # wenn der Start bis hierhin kommt, ist er erfolgreich.
+        # if self.current_state == 'targetoperation':
+        #     if self._in_operation == 'on':
+        #         self._starts[-1]['success'] = True   # wenn der Start bis hierhin kommt, ist er erfolgreich.
 
         # Ein Motorlauf(-versuch) is zu Ende. 
         if self.current_state == 'standstill': #'mode-off'
         #if actstate == 'loadramp': # übergang von loadramp to 'targetoperation'
             if self._in_operation == 'on':
                 self._starts[-1]['endtime'] = new_transition_time
+                if 'targetoperation' in self._starts[-1]:
+                    #successful if the targetoperation run was longer than specified
+                    self._starts[-1]['success'] = (self._starts[-1]['targetoperation'] > self._successtime) 
             self._in_operation = 'off'
             self._timer = pd.Timedelta(0)
 

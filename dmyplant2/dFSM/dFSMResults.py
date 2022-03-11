@@ -55,9 +55,6 @@ def detect_edge_left(data, name, startversuch=pd.DataFrame([]), left=None):
         edge = ndata.iloc[-1]
     return  Point(edge.datetime, ldata.at[edge.name,name]), ndata
 
-
-
-
 ## Resultate aus einem FSM Lauf ermitteln.
 def disp_result(startversuch):
     summary = pd.DataFrame(startversuch[filterFSM.run2filter_content]).T
