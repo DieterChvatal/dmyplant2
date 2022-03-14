@@ -3,7 +3,7 @@ import logging
 import os
 import pickle
 import warnings
-from pprint import pformat as pf
+from pprint import pprint as pp, pformat as pf
 
 import arrow
 import dmyplant2
@@ -23,6 +23,33 @@ class StateVector:
     in_operation = ''
     service_selector = ''
     msg = None
+
+    def pp(self):
+        print(
+f"""
+       statechange: {self.statechange}
+         laststate: {self.laststate}
+   laststate_start: {self.laststate_start}
+      currentstate: {self.currentstate}
+currentstate_start: {self.currentstate_start}
+      in_operation: {self.in_operation}
+  service_selector: {self.service_selector}
+               msg: {self.msg['severity']} 
+                    {pd.to_datetime(int(self.msg['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S')}  
+                    {self.msg['name']} 
+                    {self.msg['message']}
+""")
+
+    def pp_oneline(self):
+        return  f"{'*' if self.statechange else '':2} |"+ \
+                f"{self.laststate:18} " + \
+                f"{self.laststate_start.strftime('%d.%m %H:%M:%S')} |" + \
+                f"{self.currentstate:18}" + \
+                f"{self.currentstate_start.strftime('%d.%m %H:%M:%S')} |" + \
+                f"{self.in_operation:4} |" + \
+                f"{self.service_selector:4} |" + \
+                f"{self.msg['severity']} {pd.to_datetime(int(self.msg['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S')} {self.msg['name']} {self.msg['message']}"
+
 
 # States und Transferfunktionen, Sammeln von Statebezogenen Daten ... 
 class State:
@@ -58,13 +85,22 @@ class LoadrampState(State):
         self._full_load_timestamp = None
         self._loadramp = self._e['rP_Ramp_Set'] or 0.625 # %/sec
         self._default_ramp_duration = 100.0 / self._loadramp
+        #print('************ self._default_ramp_duration: *************', self._default_ramp_duration, self._e['rP_Ramp_Set'])
         super().__init__(statename, transferfun_list)
 
     def trigger_on_vector(self, vector):
+        #vector.pp()
+        #print(f"************ before 9047 full_load_timestamp = {self._full_load_timestamp} *************")        
         retsv = super().trigger_on_vector(vector)
         vector = retsv[0]
-        if vector.msg['name'] == '9047' and self._full_load_timestamp != None:
+        if self._full_load_timestamp == None:
+            #print(f"************ full_load_timestamp = {int((vector.currentstate_start.timestamp() + self._default_ramp_duration) * 1e3)} *************")
+            self._full_load_timestamp = int((vector.currentstate_start.timestamp() + self._default_ramp_duration) * 1e3)
+        #print(f"************ before 9047 full_load_timestamp = {self._full_load_timestamp} *************")        
+        if vector.msg['name'] == '9047':
+            #print(f"************ before 9047 full_load_timestamp = {self._full_load_timestamp} *************")
             self._full_load_timestamp = vector.msg['timestamp']
+            #print(f"************ after  9047 full_load_timestamp = {self._full_load_timestamp} *************")
         if self._full_load_timestamp != None and int(vector.msg['timestamp']) >= self._full_load_timestamp: # now switch to 'targetoperation'
                 vector1 = self.update_vector(vector)
                 vector1.currentstate = 'targetoperation'
@@ -76,82 +112,7 @@ class LoadrampState(State):
                 vector2.currentstate_start = pd.to_datetime(self._full_load_timestamp * 1e6)
                 self._full_load_timestamp = None
                 return [vector2,vector1]
-        if self._full_load_timestamp == None:
-            self._full_load_timestamp = int(vector.msg['timestamp']) + self._default_ramp_duration * 1e3
         return [vector]
-
-# dataClass FSM
-# class FSM:
-#     initial_state = 'standstill'
-#     states = {
-#             'standstill': State('standstill',[
-#                 { 'trigger':'1231 Request module on', 'new-state': 'startpreparation'},            
-#                 ]),
-#             'startpreparation': State('startpreparation',[
-#                 { 'trigger':'1249 Starter on', 'new-state': 'starter'},
-#                 { 'trigger':'1232 Request module off', 'new-state': 'standstill'}
-#                 ]),
-#             'starter': State('starter',[
-#                 { 'trigger':'3225 Ignition on', 'new-state':'speedup'},
-#                 { 'trigger':'1232 Request module off', 'new-state':'standstill'}
-#                 ]),
-#             'speedup': State('speedup',[
-#                 { 'trigger':'2124 Idle', 'new-state':'idle'},
-#                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
-#                 ]),             
-#             'idle': State('idle',[
-#                 { 'trigger':'2139 Request Synchronization', 'new-state':'synchronize'},
-#                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
-#                 ]),
-#             'synchronize': State('synchronize',[
-#                 { 'trigger':'1235 Generator CB closed', 'new-state':'loadramp'},                
-#                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
-#                 ]),             
-#             'loadramp': LoadrampState('loadramp',[
-#                 { 'trigger':'9047 Target load reached', 'new-state':'targetoperation'},
-#                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
-#                 ]),             
-#             'targetoperation': State('targetoperation',[
-#                 { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
-#                 ]),
-#             'rampdown': State('rampdown',[
-#                 { 'trigger':'1236 Generator CB opened', 'new-state':'coolrun'},
-#                 { 'trigger':'1231 Request module on', 'new-state':'targetoperation'},
-#                 ]),
-#             'coolrun': State('coolrun',[
-#                 { 'trigger':'1234 Operation off', 'new-state':'runout'}
-#                 ]),
-#             'runout': State('runout',[
-#                 { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
-#             ])
-#             #,         
-#             # 'aftercooling': State('aftercooling',[
-#             #     { 'trigger':'1260 Demand oil pump off', 'new-state':'standstill'},
-#             #     { 'trigger':'1231 Request module on', 'new-state': 'startpreparation'}            
-#             # ])         
-#         }
-
-
-#1260 Demand oil pump off
-
-    # @classmethod
-    # def dot(cls, fn):
-    #     """Create a FSM Diagram of specified states in *.dot Format
-
-    #     Args:
-    #         fn : Filename
-    #     """
-    #     with open(fn, 'w') as f:
-    #         f.write("digraph G {\n")
-    #         f.write('    graph [rankdir=TB labelfontcolor=red fontname="monospace" nodesep=1 size="20,33"]\n')
-    #         f.write('    node [fontname="monospace" fontsize=10  shape="circle"]\n')
-    #         f.write('    edge [fontname="monospace" color="grey" fontsize=10]\n')
-    #         for s in cls.states:
-    #             f.write(f'    {s.replace("-","")} [label="{s}"]\n')
-    #             for t in cls.states[s]._transf:
-    #                 f.write(f'    {s.replace("-","")} -> {t["new-state"].replace("-","")} [label="{t["trigger"]}"]\n')
-    #         f.write("}\n")
-
 class FSM:
     def __init__(self, e):
         self._e = e
@@ -219,6 +180,8 @@ class msgFSM:
         self.load_messages(e, p_from, p_to, skip_days)
         self._pre_period = 5*60 #sec 'prerun' in data download Start before cycle start event.
         self._post_period = 21*60 #sec 'postrun' in data download Start after cycle stop event.
+        #self._pre_period = 0 #sec 'prerun' in data download Start before cycle start event.
+        #self._post_period = 0 #sec 'postrun' in data download Start after cycle stop event.
 
         fsmStates = FSM(self._e)
         self.states = fsmStates.states
@@ -294,7 +257,7 @@ class msgFSM:
     def msgtxt(self, msg, idx=0):
         return f"{idx:>06} {msg['severity']} {msg['timestamp']} {pd.to_datetime(int(msg['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S')}  {msg['name']} {msg['message']}"
 
-    def msg_smalltxt(self, msg, idx=0):
+    def msg_smalltxt(self, msg):
         return f"{msg['severity']} {pd.to_datetime(int(msg['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S')}  {msg['name']} {msg['message']}"
 
     def save_messages(self, fn):
@@ -347,7 +310,7 @@ class msgFSM:
                     'no':self.results['starts_counter'],
                     'success': False,
                     'mode':self.svec.service_selector,
-                    'starttime': self.svec.laststate_start,
+                    'starttime': self.svec.currentstate_start,
                     'endtime': pd.Timestamp(0),
                     'cumstarttime': pd.Timedelta(0),
                     'startpreparation':np.nan,
@@ -426,16 +389,96 @@ class msgFSM:
                 retsv = self.call_trigger_states()
                 for sv in retsv:   
                     self.svec = sv   
-                    self._runlogdetail.append(
-                        f"= {'*' if self.svec.statechange else '':2} {self.svec.laststate:18} " + \
-                        f"{self.svec.laststate_start.strftime('%d.%m %H:%M:%S')} -> " + \
-                        f"{self.svec.currentstate:18}" + \
-                        f"{self.svec.currentstate_start.strftime('%d.%m %H:%M:%S')} " + \
-                        f"{self.msg_smalltxt(self.svec.msg)}")
-
+                    self._runlogdetail.append(sv.pp_oneline())
                     self._fsm_Service_selector()
                     self._fsm_collect_alarms()
                     self._fsm_Operating_Cycle()
+
+#********************************************************
+    def dorun2(self, index_list, startversuch):
+                ii = startversuch['no']
+                index_list.append(ii)
+
+                if not startversuch['run2']:
+
+                    data = dmyplant2.get_cycle_data2(self, startversuch, max_length=None, min_length=None, silent=True)
+
+                    if not data.empty:
+
+                        pl, _ = dmyplant2.detect_edge_left(data, 'Power_PowerAct', startversuch)
+                        #pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
+                        #sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
+                        #sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
+
+                        self._starts[ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
+                        #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in filterFSM.vertical_lines_times]}
+                        sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times]]
+                        start = startversuch['starttime'];
+                        
+                        # lade die in run1 gesammelten Daten in ein DataFrame, ersetze NaN Werte mit 0
+                        backup = {}
+                        svdf = pd.DataFrame(sv_lines, index=filterFSM.vertical_lines_times, columns=['FSM'], dtype=np.float64).fillna(0)
+                        svdf['RUN2'] = svdf['FSM']
+
+                        # intentionally excluded - Dieter 1.3.2022
+                        #if svdf.at['speedup','FSM'] > 0.0:
+                        #        svdf.at['speedup','RUN2'] = sl.loc.timestamp() - start.timestamp() - np.cumsum(svdf['RUN2'])['starter']
+                        #        svdf.at['idle','RUN2'] = svdf.at['idle','FSM'] - (svdf.at['speedup','RUN2'] - svdf.at['speedup','FSM'])
+                        if svdf.at['loadramp','FSM'] > 0.0:
+                                calc_loadramp = pl.loc.timestamp() - start.timestamp() - np.cumsum(svdf['RUN2'])['synchronize']
+                                svdf.at['loadramp','RUN2'] = calc_loadramp
+
+                                # collect run2 results.
+                                backup['loadramp'] = svdf.at['loadramp','FSM'] # alten Wert merken
+                                self._starts[ii]['loadramp'] = calc_loadramp
+
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            calc_maxload = pl.val
+                            try:
+                                calc_ramp = (calc_maxload / self._e['Power_PowerNominal']) * 100 / svdf.at['loadramp','RUN2']
+                            except ZeroDivisionError as err:
+                                logging.warning(f"calc_ramp: {str(err)}")
+                                calc_ramp = np.NaN
+                            # doppelte Hosenträger ... hier könnte man ein wenig aufräumen :-)
+                            if not np.isfinite(calc_ramp) :
+                                calc_ramp = np.NaN
+
+                            backup_cumstarttime = np.cumsum(svdf['FSM'])['loadramp']
+                            calc_cumstarttime = np.cumsum(svdf['RUN2'])['loadramp']
+                        svdf = pd.concat([
+                                svdf, 
+                                pd.DataFrame.from_dict(
+                                        {       'maxload':['-',calc_maxload],
+                                                'ramprate':['-',calc_ramp],
+                                                'cumstarttime':[backup_cumstarttime, calc_cumstarttime]
+                                        }, 
+                                        columns=['FSM','RUN2'],
+                                        orient='index')]
+                                )
+                        #display(HTML(svdf.round(2).T.to_html(escape=False)))
+
+                        # collect run2 results.
+                        self._starts[ii]['maxload'] = calc_maxload
+                        self._starts[ii]['ramprate'] = calc_ramp
+                        backup['cumstarttime'] = backup_cumstarttime
+                        self._starts[ii]['cumstarttime'] = calc_cumstarttime
+
+                        self._starts[ii]['backup'] = backup
+                        self._starts[ii]['run2'] = True
+
+    def run2(self, rda, silent=False):
+        index_list = []
+        if silent:
+            for n, startversuch in rda.iterrows():
+                self.dorun2(index_list, startversuch)
+        else:
+            for n, startversuch in tqdm(rda.iterrows(), total=rda.shape[0], ncols=80, mininterval=1, unit=' starts', desc="FSM Run2"):
+                self.dorun2(index_list, startversuch)
+        return pd.DataFrame([self._starts[s] for s in index_list])
+
+############################################################################
+
 # class msgFSM:
 #     def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle=False, successtime=600):
 #         self._e = e
@@ -667,80 +710,80 @@ class msgFSM:
 #                 actstate, self.current_state = self.handle_states(actstate, self.current_state, msg)
 #                 self._collect_data(actstate, msg)
 
-    def run2(self, rda):
+    # def run2(self, rda):
 
-        index_list = []
-        for n, startversuch in tqdm(rda.iterrows(), total=rda.shape[0], ncols=80, mininterval=1, unit=' starts', desc="FSM Run2"):
+    #     index_list = []
+    #     for n, startversuch in tqdm(rda.iterrows(), total=rda.shape[0], ncols=80, mininterval=1, unit=' starts', desc="FSM Run2"):
 
-                ii = startversuch['no']
-                index_list.append(ii)
+    #             ii = startversuch['no']
+    #             index_list.append(ii)
 
-                if not startversuch['run2']:
+    #             if not startversuch['run2']:
 
-                    data = dmyplant2.get_cycle_data2(self, startversuch, max_length=None, min_length=None, silent=True)
+    #                 data = dmyplant2.get_cycle_data2(self, startversuch, max_length=None, min_length=None, silent=True)
 
-                    if not data.empty:
+    #                 if not data.empty:
 
-                        pl, _ = dmyplant2.detect_edge_left(data, 'Power_PowerAct', startversuch)
-                        #pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
-                        #sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
-                        #sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
+    #                     pl, _ = dmyplant2.detect_edge_left(data, 'Power_PowerAct', startversuch)
+    #                     #pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
+    #                     #sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
+    #                     #sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
 
-                        self._starts[ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
-                        #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in filterFSM.vertical_lines_times]}
-                        sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times]]
-                        start = startversuch['starttime'];
+    #                     self._starts[ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
+    #                     #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in filterFSM.vertical_lines_times]}
+    #                     sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times]]
+    #                     start = startversuch['starttime'];
                         
-                        # lade die in run1 gesammelten Daten in ein DataFrame, ersetze NaN Werte mit 0
-                        backup = {}
-                        svdf = pd.DataFrame(sv_lines, index=filterFSM.vertical_lines_times, columns=['FSM'], dtype=np.float64).fillna(0)
-                        svdf['RUN2'] = svdf['FSM']
+    #                     # lade die in run1 gesammelten Daten in ein DataFrame, ersetze NaN Werte mit 0
+    #                     backup = {}
+    #                     svdf = pd.DataFrame(sv_lines, index=filterFSM.vertical_lines_times, columns=['FSM'], dtype=np.float64).fillna(0)
+    #                     svdf['RUN2'] = svdf['FSM']
 
-                        # intentionally excluded - Dieter 1.3.2022
-                        #if svdf.at['speedup','FSM'] > 0.0:
-                        #        svdf.at['speedup','RUN2'] = sl.loc.timestamp() - start.timestamp() - np.cumsum(svdf['RUN2'])['starter']
-                        #        svdf.at['idle','RUN2'] = svdf.at['idle','FSM'] - (svdf.at['speedup','RUN2'] - svdf.at['speedup','FSM'])
-                        if svdf.at['loadramp','FSM'] > 0.0:
-                                calc_loadramp = pl.loc.timestamp() - start.timestamp() - np.cumsum(svdf['RUN2'])['synchronize']
-                                svdf.at['loadramp','RUN2'] = calc_loadramp
+    #                     # intentionally excluded - Dieter 1.3.2022
+    #                     #if svdf.at['speedup','FSM'] > 0.0:
+    #                     #        svdf.at['speedup','RUN2'] = sl.loc.timestamp() - start.timestamp() - np.cumsum(svdf['RUN2'])['starter']
+    #                     #        svdf.at['idle','RUN2'] = svdf.at['idle','FSM'] - (svdf.at['speedup','RUN2'] - svdf.at['speedup','FSM'])
+    #                     if svdf.at['loadramp','FSM'] > 0.0:
+    #                             calc_loadramp = pl.loc.timestamp() - start.timestamp() - np.cumsum(svdf['RUN2'])['synchronize']
+    #                             svdf.at['loadramp','RUN2'] = calc_loadramp
 
-                                # collect run2 results.
-                                backup['loadramp'] = svdf.at['loadramp','FSM'] # alten Wert merken
-                                self._starts[ii]['loadramp'] = calc_loadramp
+    #                             # collect run2 results.
+    #                             backup['loadramp'] = svdf.at['loadramp','FSM'] # alten Wert merken
+    #                             self._starts[ii]['loadramp'] = calc_loadramp
 
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore")
-                            calc_maxload = pl.val
-                            try:
-                                calc_ramp = (calc_maxload / self._e['Power_PowerNominal']) * 100 / svdf.at['loadramp','RUN2']
-                            except ZeroDivisionError as err:
-                                logging.warning(f"calc_ramp: {str(err)}")
-                                calc_ramp = np.NaN
-                            # doppelte Hosenträger ... hier könnte man ein wenig aufräumen :-)
-                            if not np.isfinite(calc_ramp) :
-                                calc_ramp = np.NaN
+    #                     with warnings.catch_warnings():
+    #                         warnings.simplefilter("ignore")
+    #                         calc_maxload = pl.val
+    #                         try:
+    #                             calc_ramp = (calc_maxload / self._e['Power_PowerNominal']) * 100 / svdf.at['loadramp','RUN2']
+    #                         except ZeroDivisionError as err:
+    #                             logging.warning(f"calc_ramp: {str(err)}")
+    #                             calc_ramp = np.NaN
+    #                         # doppelte Hosenträger ... hier könnte man ein wenig aufräumen :-)
+    #                         if not np.isfinite(calc_ramp) :
+    #                             calc_ramp = np.NaN
 
-                            backup_cumstarttime = np.cumsum(svdf['FSM'])['loadramp']
-                            calc_cumstarttime = np.cumsum(svdf['RUN2'])['loadramp']
-                        svdf = pd.concat([
-                                svdf, 
-                                pd.DataFrame.from_dict(
-                                        {       'maxload':['-',calc_maxload],
-                                                'ramprate':['-',calc_ramp],
-                                                'cumstarttime':[backup_cumstarttime, calc_cumstarttime]
-                                        }, 
-                                        columns=['FSM','RUN2'],
-                                        orient='index')]
-                                )
-                        #display(HTML(svdf.round(2).T.to_html(escape=False)))
+    #                         backup_cumstarttime = np.cumsum(svdf['FSM'])['loadramp']
+    #                         calc_cumstarttime = np.cumsum(svdf['RUN2'])['loadramp']
+    #                     svdf = pd.concat([
+    #                             svdf, 
+    #                             pd.DataFrame.from_dict(
+    #                                     {       'maxload':['-',calc_maxload],
+    #                                             'ramprate':['-',calc_ramp],
+    #                                             'cumstarttime':[backup_cumstarttime, calc_cumstarttime]
+    #                                     }, 
+    #                                     columns=['FSM','RUN2'],
+    #                                     orient='index')]
+    #                             )
+    #                     #display(HTML(svdf.round(2).T.to_html(escape=False)))
 
-                        # collect run2 results.
-                        self._starts[ii]['maxload'] = calc_maxload
-                        self._starts[ii]['ramprate'] = calc_ramp
-                        backup['cumstarttime'] = backup_cumstarttime
-                        self._starts[ii]['cumstarttime'] = calc_cumstarttime
+    #                     # collect run2 results.
+    #                     self._starts[ii]['maxload'] = calc_maxload
+    #                     self._starts[ii]['ramprate'] = calc_ramp
+    #                     backup['cumstarttime'] = backup_cumstarttime
+    #                     self._starts[ii]['cumstarttime'] = calc_cumstarttime
 
-                        self._starts[ii]['backup'] = backup
-                        self._starts[ii]['run2'] = True
+    #                     self._starts[ii]['backup'] = backup
+    #                     self._starts[ii]['run2'] = True
 
-        return pd.DataFrame([self._starts[s] for s in index_list])
+    #     return pd.DataFrame([self._starts[s] for s in index_list])
