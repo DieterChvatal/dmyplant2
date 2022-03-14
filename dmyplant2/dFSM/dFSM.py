@@ -331,17 +331,29 @@ class msgFSM:
                 })
                 self.results['starts_counter'] += 1 # index for next start
                 self.svec.in_operation = 'on'
-            elif self.svec.in_operation == 'on': # and actstate != FSM.initial_state:            
-                self.results['starts'][-1]['timing']['start_'+ self.svec.laststate] = self.svec.laststate_start 
-                self.results['starts'][-1]['timing']['end_'+ self.svec.laststate] = self.svec.currentstate_start 
+            elif self.svec.in_operation == 'on': # and actstate != FSM.initial_state:
+                rec = {'start':self.svec.laststate_start, 'end':self.svec.currentstate_start}
+                if not self.svec.laststate in self.results['starts'][-1]['timing']:
+                    self.results['starts'][-1]['timing'][self.svec.laststate]=[rec]
+                else:
+                    self.results['starts'][-1]['timing'][self.svec.laststate].append(rec)
+                #self.results['starts'][-1]['timing']['start_'+ self.svec.laststate] = self.svec.laststate_start 
+                #self.results['starts'][-1]['timing']['end_'+ self.svec.laststate] = self.svec.currentstate_start 
 
             if self.svec.currentstate == 'standstill':
                 if self.svec.in_operation == 'on':
                     # start finished
                     self.results['starts'][-1]['endtime'] = self.svec.currentstate_start
                     # calc phase durations
-                    phases = [x[6:] for x in self.results['starts'][-1]['timing'] if x.startswith('start_')]
-                    durations = { ph:pd.Timedelta(self.results['starts'][-1]['timing']['end_'+ph] - self.results['starts'][-1]['timing']['start_'+ph]).total_seconds() for ph in phases}
+                    sv = self.results['starts'][-1]
+                    # phases = [x[6:] for x in self.results['starts'][-1]['timing'] if x.startswith('start_')]
+                    phases = list(sv['timing'].keys())
+                    if 'targetoperation' in phases:
+                        tlr = sv['timing']['targetoperation']
+                        tlr = [{'start':tlr[0]['start'], 'end':tlr[-1]['end']}]
+                        sv['timing']['targetoperation'] = tlr
+                    # durations = { ph:pd.Timedelta(self.results['starts'][-1]['timing']['end_'+ph] - self.results['starts'][-1]['timing']['start_'+ph]).total_seconds() for ph in phases}
+                    durations = { ph:pd.Timedelta(sv['timing'][ph][-1]['end'] - sv['timing'][ph][-1]['start']).total_seconds() for ph in phases}
                     durations['cumstarttime'] = sum([v for k,v in durations.items() if k in ['startpreparation','starter','speedup','idle','synchronize','loadramp']])
                     self.results['starts'][-1].update(durations)
                     if 'targetoperation' in self.results['starts'][-1]:
@@ -410,7 +422,7 @@ class msgFSM:
                         #sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
                         #sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
 
-                        self._starts[ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
+                        self.results['starts'][ii]['title'] = f"{self._e} ----- Start {ii} {startversuch['mode']} | {'SUCCESS' if startversuch['success'] else 'FAILED'} | {startversuch['starttime'].round('S')}"
                         #sv_lines = {k:(startversuch[k] if k in startversuch else np.NaN) for k in filterFSM.vertical_lines_times]}
                         sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times]]
                         start = startversuch['starttime'];
@@ -430,7 +442,7 @@ class msgFSM:
 
                                 # collect run2 results.
                                 backup['loadramp'] = svdf.at['loadramp','FSM'] # alten Wert merken
-                                self._starts[ii]['loadramp'] = calc_loadramp
+                                self.results['starts'][ii]['loadramp'] = calc_loadramp
 
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore")
@@ -459,13 +471,13 @@ class msgFSM:
                         #display(HTML(svdf.round(2).T.to_html(escape=False)))
 
                         # collect run2 results.
-                        self._starts[ii]['maxload'] = calc_maxload
-                        self._starts[ii]['ramprate'] = calc_ramp
+                        self.results['starts'][ii]['maxload'] = calc_maxload
+                        self.results['starts'][ii]['ramprate'] = calc_ramp
                         backup['cumstarttime'] = backup_cumstarttime
-                        self._starts[ii]['cumstarttime'] = calc_cumstarttime
+                        self.results['starts'][ii]['cumstarttime'] = calc_cumstarttime
 
-                        self._starts[ii]['backup'] = backup
-                        self._starts[ii]['run2'] = True
+                        self.results['starts'][ii]['backup'] = backup
+                        self.results['starts'][ii]['run2'] = True
 
     def run2(self, rda, silent=False):
         index_list = []
@@ -475,7 +487,7 @@ class msgFSM:
         else:
             for n, startversuch in tqdm(rda.iterrows(), total=rda.shape[0], ncols=80, mininterval=1, unit=' starts', desc="FSM Run2"):
                 self.dorun2(index_list, startversuch)
-        return pd.DataFrame([self._starts[s] for s in index_list])
+        return pd.DataFrame([self.results['starts'][s] for s in index_list])
 
 ############################################################################
 
