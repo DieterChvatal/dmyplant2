@@ -40,14 +40,14 @@ currentstate_start: {self.currentstate_start}
                     {self.msg['message']}
 """)
 
-    def pp_oneline(self):
-        return  f"{'*' if self.statechange else '':2} |"+ \
-                f"{self.laststate:18} " + \
-                f"{self.laststate_start.strftime('%d.%m %H:%M:%S')} |" + \
-                f"{self.currentstate:18}" + \
-                f"{self.currentstate_start.strftime('%d.%m %H:%M:%S')} |" + \
-                f"{self.in_operation:4} |" + \
-                f"{self.service_selector:4} |" + \
+    def __str__(self):
+        return  f"{'*' if self.statechange else '':2}|"+ \
+                f"{self.laststate_start.strftime('%d.%m %H:%M:%S')} " + \
+                f"{self.laststate:18}| " + \
+                f"{self.currentstate_start.strftime('%d.%m %H:%M:%S')} " + \
+                f"{self.currentstate:18}| " + \
+                f"{self.in_operation:4}| " + \
+                f"{self.service_selector:4}| " + \
                 f"{self.msg['severity']} {pd.to_datetime(int(self.msg['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S')} {self.msg['name']} {self.msg['message']}"
 
 
@@ -174,7 +174,7 @@ class filterFSM:
     vertical_lines_times = ['startpreparation','starter','speedup','idle','synchronize','loadramp','targetoperation','rampdown','coolrun','runout']
 
 class msgFSM:
-    def __init__(self, e, p_from = None, p_to=None, skip_days=None, successtime=600):
+    def __init__(self, e, p_from = None, p_to=None, skip_days=None, frompickle='NOTIMPLEMENTED',successtime=600):
         self._e = e
         self._successtime = successtime
         self.load_messages(e, p_from, p_to, skip_days)
@@ -196,8 +196,8 @@ class msgFSM:
         self.svec.service_selector = '???'
 
         self.pfn = self._e._fname + '_statemachine.pkl'
-        self._runlog = []
-        self._runlogdetail = []
+        #self._runlog = []
+        #self._runlogdetail = []
         self.init_results()
 
     def init_results(self):
@@ -215,7 +215,8 @@ class msgFSM:
                 'warnings':[]                
             }],
             'stops_counter':0,
-            'runlog': []
+            'runlog': [],
+            'runlogdetail': []
         }     
 
     @property
@@ -274,6 +275,16 @@ class msgFSM:
             with open(fn, 'w') as f:
                 for line in self._runlog:
                     f.write(line + '\n')
+
+    def runlogdetail(self, startversuch, statechanges_only = False):
+        ts_start = startversuch['starttime'].timestamp() * 1e3
+        ts_end = startversuch['endtime'].timestamp() * 1e3
+        if statechanges_only:
+            log = [x for x in self.results['runlogdetail'] if x.statechange]
+        else:
+            log = self.results['runlogdetail']
+        log = [x for x in log if ((x.msg['timestamp'] >= ts_start) and (x.msg['timestamp'] <= ts_end))]
+        return log
 
 #################################################################################################################
 ### die Finite State Machines:
@@ -397,14 +408,33 @@ class msgFSM:
             for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
             #for i, msg in self._messages.iterrows():
 
+                # the FSM statusvector is called self.svec
                 self.svec.msg = msg
                 retsv = self.call_trigger_states()
                 for sv in retsv:   
-                    self.svec = sv   
-                    self._runlogdetail.append(sv.pp_oneline())
+                    self.svec = sv
+                    #print(f"{len(self.results['runlogdetail']):5} {sv}")
+                    self.results['runlogdetail'].append(copy.deepcopy(sv))
                     self._fsm_Service_selector()
                     self._fsm_collect_alarms()
                     self._fsm_Operating_Cycle()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #********************************************************
     def dorun2(self, index_list, startversuch):
