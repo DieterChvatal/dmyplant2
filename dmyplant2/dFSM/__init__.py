@@ -7,5 +7,10 @@ from .dFSMResults import (
     disp_warnings, 
     alarms_pareto, 
     warnings_pareto
-    )
-from .dFSMPlot import FSMPlot_Start, get_cycle_data2, states_lines
+)
+from .dFSMPlot import (
+    FSMPlot_Start, 
+    get_cycle_data2, 
+    states_lines, 
+    plot_with_additional_results
+)

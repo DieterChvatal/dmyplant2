@@ -4,10 +4,11 @@ import arrow
 import bokeh
 from bokeh.models import Span, Text, Label
 from IPython.display import HTML, display
-from dmyplant2 import dbokeh_chart, bokeh_show, add_dbokeh_vlines, add_dbokeh_hlines
+from dmyplant2 import dbokeh_chart, bokeh_show, add_dbokeh_vlines, add_dbokeh_hlines 
 from .dFSM import filterFSM
-from .dFSMResults import disp_alarms, disp_warnings
-
+from .dFSMResults import disp_alarms, disp_warnings, detect_edge_right, detect_edge_left
+import warnings
+warnings.simplefilter(action='ignore', category=UserWarning)
   
 def FSMPlot_Start(fsm,startversuch, data, vset, dset, figsize=(16,10)):
     von_dt=pd.to_datetime(startversuch['starttime']); von=int(von_dt.timestamp())
@@ -52,7 +53,7 @@ def _load_data(fsm, engine=None, p_data=None, ts_from=None, ts_to=None, p_timeCy
     #return engine.hist_data(
     # changed to hist_data2 8.3.2022 - Dieter
     return engine.hist_data2(
-        itemIds = engine.get_dataItems(p_data or fsm._data_spec),
+        itemIds = engine.get_dataItems(p_data or ['Various_Values_SpeedAct','Power_PowerAct']),
         p_from = arrow.get(ts_from).to('Europe/Vienna'),
         p_to = arrow.get(ts_to).to('Europe/Vienna'),
         timeCycle=p_timeCycle,
@@ -171,3 +172,42 @@ def states_lines(startversuch):
     sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times] if v==v]
     start = startversuch['starttime']; lines=list(np.cumsum(sv_lines)); 
     return [start + pd.Timedelta(value=v,unit='sec') for v in [0] + lines]
+
+def plot_with_additional_results(
+        fsm,
+        startversuch, 
+        vset=None, 
+        dset = 
+        [{'col':['Power_PowerAct'], 'ylim':(0,5000), 'color':'red'},
+        {'col':['Various_Values_SpeedAct'],'ylim': [0, 2500], 'color':'blue'}],
+        dfigsize=(16,8)
+    ):
+
+    if vset == None:
+        vset = []
+        for rec in dset:
+            for d in rec['col']:
+                vset.append(d) 
+        vset = list(set(vset))
+
+    data = get_cycle_data2(fsm, startversuch, max_length=None, min_length=None, cycletime=1, silent=False, p_data=vset)
+    fig = FSMPlot_Start(fsm, startversuch, data, vset, dset, figsize=dfigsize); 
+    #fsm run 2 results
+    lcol='blue'
+    pl, _ = detect_edge_left(data, 'Power_PowerAct', startversuch)
+    pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
+    sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
+    sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
+    add_dbokeh_vlines([sl.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
+    add_dbokeh_vlines([sr.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
+    add_dbokeh_vlines([pl.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
+    add_dbokeh_vlines([pr.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
+
+    #pp(startversuch['timing']) # ['timings']['start_loadramp'])
+    if 'loadramp' in startversuch['timing']:
+        add_dbokeh_vlines([startversuch['timing']['loadramp'][-1]['end']], fig,line_color='green', line_dash='solid', line_alpha=0.4)
+
+    #new_lines = [startversuch['starttime']] + [startversuch[k] for k in startversuch.keys() if k.endswith('_time')]
+    #add_dbokeh_vlines(new_lines,fig,line_color='green', line_dash='solid', line_alpha=0.4)
+    bokeh_show(fig)
+    del(fig)
