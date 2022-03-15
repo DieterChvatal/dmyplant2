@@ -30,8 +30,8 @@ def FSMPlot_Start(fsm,startversuch, data, vset, dset, figsize=(16,10)):
     
     fig = dbokeh_chart(data, dset, title=ftitle, grid=False, figsize=figsize, style='line', line_width=0)
 
-    add_dbokeh_vlines(al_lines,fig,line_color='purple', line_dash='dashed', line_alpha=1, line_width=2)
-    add_dbokeh_vlines(w_lines,fig,line_color='brown', line_dash='dashed', line_alpha=1, line_width=2)
+    add_dbokeh_vlines(al_lines,fig,line_color='red', line_dash='dashed', line_alpha=1, line_width=4)
+    add_dbokeh_vlines(w_lines,fig,line_color='#d5ac13', line_dash='dashed', line_alpha=1, line_width=4)
     add_dbokeh_vlines(states_lines(startversuch),fig,line_color='red', line_dash='solid', line_alpha=0.4)
                             
     fig.add_layout(Span(location=fsm._e['Power_PowerNominal'],dimension='width',x_range_name='default', y_range_name='0',line_color='red', line_dash='solid', line_alpha=0.4)) 
@@ -110,7 +110,7 @@ def get_cycle_data(fsm,rec, max_length=None, min_length=None, cycletime=None, si
     return data
 #################
 
-def _debug(fsm,start, ende, data, dataname):
+def _debug(start, ende, data, dataname):
     def todate(ts):
         return pd.to_datetime(ts * 1000000).strftime('%d.%m.%Y %H:%M:%S')
     print(f"########## debug {dataname } ##########")
@@ -135,13 +135,13 @@ def _load_reduced_data(fsm, startversuch, ptts_from, ptts_to, pdata=None):
         data1 = data1[(data1['time'] >= ptts_from) & (data1['time'] < d1t)]
     data2 = load_data(fsm, cycletime=30, tts_from=d1t, tts_to=d3t, silent=True, p_data=pdata)
     if 'time' in data2:
-        data2 = data2[(data2['time'] >= d1t) & (data1['time'] < d3t)]
+        data2 = data2[(data2['time'] >= d1t) & (data2['time'] < d3t)]
     data3 = load_data(fsm,cycletime=1, tts_from=d3t, tts_to=ptts_to, silent=True, p_data=pdata)
     if 'time' in data3:
         data3 = data3[(data3['time'] >= d3t) & (data3['time'] <= ptts_to)]
-    #fsm._debug(ptts_from,d1t, data1, 'data1')
-    #fsm._debug(d1t,d3t, data2, 'data2')
-    #fsm._debug(d3t,ptts_to,data3, 'data3')
+    #_debug(ptts_from,d1t, data1, 'data1')
+    #_debug(d1t,d3t, data2, 'data2')
+    #_debug(d3t,ptts_to,data3, 'data3')
     return pd.concat([data1,data2,data3]).reset_index(drop='index')
 
 def get_cycle_data2(fsm,startversuch, max_length=None, min_length=None, cycletime=None, silent=False, p_data=None):
@@ -205,9 +205,6 @@ def plot_with_additional_results(
 
     #pp(startversuch['timing']) # ['timings']['start_loadramp'])
     if 'loadramp' in startversuch['timing']:
-        add_dbokeh_vlines([startversuch['timing']['loadramp'][-1]['end']], fig,line_color='green', line_dash='solid', line_alpha=0.4)
+        add_dbokeh_vlines([startversuch['timing']['loadramp'][-1]['end']], fig,line_color='green', line_dash='solid', line_alpha=0.4, line_width=4)
 
-    #new_lines = [startversuch['starttime']] + [startversuch[k] for k in startversuch.keys() if k.endswith('_time')]
-    #add_dbokeh_vlines(new_lines,fig,line_color='green', line_dash='solid', line_alpha=0.4)
-    bokeh_show(fig)
-    del(fig)
+    return fig
