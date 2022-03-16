@@ -97,8 +97,8 @@ class LoadrampState(State):
         retsv = super().trigger_on_vector(vector)
         vector = retsv[0]
         #debug code
-        if self._full_load_timestamp != None and vector.msg['timestamp'] < self._full_load_timestamp:
-            print(f"fldstmp: {pd.to_datetime(self._full_load_timestamp * 1e6).strftime('%d.%m.%Y %H:%M:%S')} {vector}")
+        #if self._full_load_timestamp != None and vector.msg['timestamp'] < self._full_load_timestamp:
+        #    print(f"fldstmp: {pd.to_datetime(self._full_load_timestamp * 1e6).strftime('%d.%m.%Y %H:%M:%S')} {vector}")
         if self._full_load_timestamp == None:
             self._full_load_timestamp = int((vector.currentstate_start.timestamp() + self._default_ramp_duration) * 1e3)
         if vector.msg['name'] == '9047':
@@ -148,9 +148,11 @@ class FSM:
                     ], e),             
                 'targetoperation': State('targetoperation',[
                     { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
+                    { 'trigger':'1236 Generator CB opened', 'new-state':'idle'},
                     ]),
                 'rampdown': State('rampdown',[
                     { 'trigger':'1236 Generator CB opened', 'new-state':'coolrun'},
+                    { 'trigger':'3226 Ignition off', 'new-state':'standstill'},
                     { 'trigger':'1231 Request module on', 'new-state':'targetoperation'},
                     ]),
                 'coolrun': State('coolrun',[
@@ -406,7 +408,7 @@ class msgFSM:
         return self.states[self.svec.currentstate].trigger_on_vector(self.svec)
 
     ## FSM Entry Point.
-    def run1(self, enforce=False):
+    def run1(self, enforce=False, limitdebug = None):
         if len(self.results['starts']) == 0 or enforce or not ('run2' in self.results['starts'][0]):
             self.init_results()
             #tqdm disturbes the VSC Debugger - disable for debug purposes please.     
@@ -423,9 +425,7 @@ class msgFSM:
                     self._fsm_Service_selector()
                     self._fsm_collect_alarms()
                     self._fsm_Operating_Cycle()
-                # limit starts for debugging
-                if sv.startno > 15:
-                    break
+                            
 
 
 
