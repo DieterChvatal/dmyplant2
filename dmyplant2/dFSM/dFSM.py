@@ -177,6 +177,23 @@ class FSM:
     def states(self):
         return self._states
 
+    def dot(self, fn):
+        """Create a FSM Diagram of specified states in *.dot Format
+        Args:
+            fn : Filename
+        """
+        with open(fn, 'w') as f:
+            f.write("digraph G {\n")
+            f.write('    graph [rankdir=TB labelfontcolor=red fontname="monospace" nodesep=1 size="20,33"]\n')
+            f.write('    node [fontname="monospace" fontsize=10  shape="circle"]\n')
+            f.write('    edge [fontname="monospace" color="grey" fontsize=10]\n')
+            for s in self._states:
+                f.write(f'    {s.replace("-","")} [label="{s}"]\n')
+                for t in self._states[s]._transf:
+                    f.write(f'    {s.replace("-","")} -> {t["new-state"].replace("-","")} [label="{t["trigger"]}"]\n')
+            f.write("}\n")
+
+
 class filterFSM:
     run2filter_content = ['no','success','mode','startpreparation','starter','speedup','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','rampdown','coolrun','runout','count_alarms', 'count_warnings']
     vertical_lines_times = ['startpreparation','starter','speedup','idle','synchronize','loadramp','targetoperation','rampdown','coolrun','runout']
@@ -192,6 +209,7 @@ class msgFSM:
         #self._post_period = 0 #sec 'postrun' in data download Start after cycle stop event.
 
         fsmStates = FSM(self._e)
+        fsmStates.dot('FSM.dot')
         self.states = fsmStates.states
 
         self.svec = StateVector()
