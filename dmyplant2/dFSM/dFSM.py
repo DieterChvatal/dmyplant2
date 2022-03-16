@@ -96,6 +96,9 @@ class LoadrampState(State):
         #print(vector)
         retsv = super().trigger_on_vector(vector)
         vector = retsv[0]
+        if vector.statechange:
+            self._full_load_timestamp = None
+            return [vector]
         #debug code
         #if self._full_load_timestamp != None and vector.msg['timestamp'] < self._full_load_timestamp:
         #    print(f"fldstmp: {pd.to_datetime(self._full_load_timestamp * 1e6).strftime('%d.%m.%Y %H:%M:%S')} {vector}")
@@ -144,7 +147,8 @@ class FSM:
                     { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                     ]),             
                 'loadramp': LoadrampState('loadramp',[
-                    { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
+                    { 'trigger':'3226 Ignition off', 'new-state':'standstill'},
+                    { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
                     ], e),             
                 'targetoperation': State('targetoperation',[
                     { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
@@ -280,6 +284,12 @@ class msgFSM:
                 for line in self._runlog:
                     f.write(line + '\n')
 
+    def save_detailrunlog(self, fn):
+        if len(self.results['runlogdetail']):
+            with open(fn, 'w') as f:
+                for vec in self.results['runlogdetail']:
+                    f.write(vec.__str__() + '\n')
+
     def runlogdetail(self, startversuch, statechanges_only = False):
         ts_start = startversuch['starttime'].timestamp() * 1e3
         ts_end = startversuch['endtime'].timestamp() * 1e3
@@ -364,10 +374,12 @@ class msgFSM:
                     sv = self.results['starts'][-1]
                     # phases = [x[6:] for x in self.results['starts'][-1]['timing'] if x.startswith('start_')]
                     phases = list(sv['timing'].keys())
+
+                    # some sense checks, mostly for commissioning or Test cycles 
                     if 'targetoperation' in phases:
                         tlr = sv['timing']['targetoperation']
                         tlr = [{'start':tlr[0]['start'], 'end':tlr[-1]['end']}]
-                        sv['timing']['targetoperation_org'] = sv['timing']['targetoperation'] 
+                        sv['timing']['targetoperation_org'] = sv['timing']['targetoperation']
                         sv['timing']['targetoperation'] = tlr
                     # durations = { ph:pd.Timedelta(self.results['starts'][-1]['timing']['end_'+ph] - self.results['starts'][-1]['timing']['start_'+ph]).total_seconds() for ph in phases}
                     durations = { ph:pd.Timedelta(sv['timing'][ph][-1]['end'] - sv['timing'][ph][-1]['start']).total_seconds() for ph in phases}
@@ -412,8 +424,8 @@ class msgFSM:
         if len(self.results['starts']) == 0 or enforce or not ('run2' in self.results['starts'][0]):
             self.init_results()
             #tqdm disturbes the VSC Debugger - disable for debug purposes please.     
-            #for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
-            for i, msg in self._messages.iterrows():
+            for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
+            #for i, msg in self._messages.iterrows():
 
                 # the FSM statusvector is called self.svec
                 self.svec.msg = msg
