@@ -1,4 +1,5 @@
 import copy
+from datetime import datetime
 import logging
 import os
 import pickle
@@ -16,6 +17,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #Various_Bits_CollAlarm
 class StateVector:
     statechange = False
+    startno = 0
     laststate = ''
     laststate_start = None,
     currentstate = ''
@@ -28,6 +30,7 @@ class StateVector:
         print(
 f"""
        statechange: {self.statechange}
+           startno: {self.startno}
          laststate: {self.laststate}
    laststate_start: {self.laststate_start}
       currentstate: {self.currentstate}
@@ -42,12 +45,13 @@ currentstate_start: {self.currentstate_start}
 
     def __str__(self):
         return  f"{'*' if self.statechange else '':2}|"+ \
+                f"{self.startno:04}| " + \
                 f"{self.laststate_start.strftime('%d.%m %H:%M:%S')} " + \
                 f"{self.laststate:18}| " + \
                 f"{self.currentstate_start.strftime('%d.%m %H:%M:%S')} " + \
                 f"{self.currentstate:18}| " + \
                 f"{self.in_operation:4}| " + \
-                f"{self.service_selector:4}| " + \
+                f"{self.service_selector:6}| " + \
                 f"{self.msg['severity']} {pd.to_datetime(int(self.msg['timestamp'])*1e6).strftime('%d.%m.%Y %H:%M:%S')} {self.msg['name']} {self.msg['message']}"
 
 
@@ -89,18 +93,16 @@ class LoadrampState(State):
         super().__init__(statename, transferfun_list)
 
     def trigger_on_vector(self, vector):
-        #vector.pp()
-        #print(f"************ before 9047 full_load_timestamp = {self._full_load_timestamp} *************")        
+        #print(vector)
         retsv = super().trigger_on_vector(vector)
         vector = retsv[0]
+        #debug code
+        if self._full_load_timestamp != None and vector.msg['timestamp'] < self._full_load_timestamp:
+            print(f"fldstmp: {pd.to_datetime(self._full_load_timestamp * 1e6).strftime('%d.%m.%Y %H:%M:%S')} {vector}")
         if self._full_load_timestamp == None:
-            #print(f"************ full_load_timestamp = {int((vector.currentstate_start.timestamp() + self._default_ramp_duration) * 1e3)} *************")
             self._full_load_timestamp = int((vector.currentstate_start.timestamp() + self._default_ramp_duration) * 1e3)
-        #print(f"************ before 9047 full_load_timestamp = {self._full_load_timestamp} *************")        
         if vector.msg['name'] == '9047':
-            #print(f"************ before 9047 full_load_timestamp = {self._full_load_timestamp} *************")
             self._full_load_timestamp = vector.msg['timestamp']
-            #print(f"************ after  9047 full_load_timestamp = {self._full_load_timestamp} *************")
         if self._full_load_timestamp != None and int(vector.msg['timestamp']) >= self._full_load_timestamp: # now switch to 'targetoperation'
                 vector1 = self.update_vector(vector)
                 vector1.currentstate = 'targetoperation'
@@ -341,6 +343,7 @@ class msgFSM:
                     'ramprate': np.nan
                 })
                 self.results['starts_counter'] += 1 # index for next start
+                self.svec.startno = self.results['starts_counter']
                 self.svec.in_operation = 'on'
             elif self.svec.in_operation == 'on': # and actstate != FSM.initial_state:
                 rec = {'start':self.svec.laststate_start, 'end':self.svec.currentstate_start}
@@ -362,6 +365,7 @@ class msgFSM:
                     if 'targetoperation' in phases:
                         tlr = sv['timing']['targetoperation']
                         tlr = [{'start':tlr[0]['start'], 'end':tlr[-1]['end']}]
+                        sv['timing']['targetoperation_org'] = sv['timing']['targetoperation'] 
                         sv['timing']['targetoperation'] = tlr
                     # durations = { ph:pd.Timedelta(self.results['starts'][-1]['timing']['end_'+ph] - self.results['starts'][-1]['timing']['start_'+ph]).total_seconds() for ph in phases}
                     durations = { ph:pd.Timedelta(sv['timing'][ph][-1]['end'] - sv['timing'][ph][-1]['start']).total_seconds() for ph in phases}
@@ -404,9 +408,10 @@ class msgFSM:
     ## FSM Entry Point.
     def run1(self, enforce=False):
         if len(self.results['starts']) == 0 or enforce or not ('run2' in self.results['starts'][0]):
-            self.init_results()     
-            for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
-            #for i, msg in self._messages.iterrows():
+            self.init_results()
+            #tqdm disturbes the VSC Debugger - disable for debug purposes please.     
+            #for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
+            for i, msg in self._messages.iterrows():
 
                 # the FSM statusvector is called self.svec
                 self.svec.msg = msg
@@ -418,6 +423,9 @@ class msgFSM:
                     self._fsm_Service_selector()
                     self._fsm_collect_alarms()
                     self._fsm_Operating_Cycle()
+                # limit starts for debugging
+                if sv.startno > 15:
+                    break
 
 
 
