@@ -485,6 +485,11 @@ class MyPlant:
             fleet= self._fetch_installed_base()
         return fleet
 
+    def search_installed_fleet_by_contains_name(self, name):
+        def sfun(x):
+            return all([ (str(name).upper() in f"{str(x['IB Site Name'])} {str(x['serialNumber'])} {str(x['Design Number'])} {str(x['Engine Type'])} {str(x['Engine Version'])}".upper()),  (x['OperationalCondition'] != 'Decommissioned') ])
+        return self.search_installed_fleet(sfun)
+
     def search_installed_fleet(self, sfun):
         """Search the installed base by a complex search Function:
 
