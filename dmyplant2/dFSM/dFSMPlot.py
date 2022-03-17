@@ -30,8 +30,8 @@ def FSMPlot_Start(fsm,startversuch, data, vset, dset, figsize=(16,10)):
     
     fig = dbokeh_chart(data, dset, title=ftitle, grid=False, figsize=figsize, style='line', line_width=0)
 
-    add_dbokeh_vlines(al_lines,fig,line_color='red', line_dash='dashed', line_alpha=1, line_width=4)
-    add_dbokeh_vlines(w_lines,fig,line_color='#d5ac13', line_dash='dashed', line_alpha=1, line_width=4)
+    add_dbokeh_vlines(al_lines,fig,line_color='red', line_dash='dashed', line_alpha=0.4, line_width=2)
+    add_dbokeh_vlines(w_lines,fig,line_color='#d5ac13', line_dash='dashed', line_alpha=0.4, line_width=2)
     add_dbokeh_vlines(states_lines(startversuch),fig,line_color='red', line_dash='solid', line_alpha=0.4)
                             
     fig.add_layout(Span(location=fsm._e['Power_PowerNominal'],dimension='width',x_range_name='default', y_range_name='0',line_color='red', line_dash='solid', line_alpha=0.4)) 

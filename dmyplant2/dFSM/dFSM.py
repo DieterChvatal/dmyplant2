@@ -69,7 +69,7 @@ class State:
                 return transfun['new-state']
         return self._statename
 
-    def update_vector(self, vector):
+    def update_vector_on_statechange(self, vector):
         vector.laststate = self._statename
         vector.laststate_start = vector.currentstate_start
         vector.currentstate_start = pd.to_datetime(vector.msg['timestamp'] * 1e6)
@@ -79,7 +79,7 @@ class State:
         vector.currentstate = self.send(vector.msg)
         vector.statechange = self._trigger
         if self._trigger:
-            vector = self.update_vector(vector)
+            vector = self.update_vector_on_statechange(vector)
         return [vector]
 
 # SpezialFall Loadram, hier wird ein berechneter Statechange ermittelt.
@@ -89,31 +89,48 @@ class LoadrampState(State):
         self._full_load_timestamp = None
         self._loadramp = self._e['rP_Ramp_Set'] or 0.625 # %/sec
         self._default_ramp_duration = 100.0 / self._loadramp
-        #print('************ self._default_ramp_duration: *************', self._default_ramp_duration, self._e['rP_Ramp_Set'])
         super().__init__(statename, transferfun_list)
 
     def trigger_on_vector(self, vector):
         #print(vector)
-        retsv = super().trigger_on_vector(vector)
-        vector = retsv[0]
-        #debug code
-        #if self._full_load_timestamp != None and vector.msg['timestamp'] < self._full_load_timestamp:
-        #    print(f"fldstmp: {pd.to_datetime(self._full_load_timestamp * 1e6).strftime('%d.%m.%Y %H:%M:%S')} {vector}")
+        vectorlist = super().trigger_on_vector(vector)
+        vector = vectorlist[0]
+
+        # one of the triggerfunctions has already changed state. 
+        if vector.statechange: 
+            self._full_load_timestamp = None
+            return [vector]
+
+        # calculate the end of ramp time.
         if self._full_load_timestamp == None:
             self._full_load_timestamp = int((vector.currentstate_start.timestamp() + self._default_ramp_duration) * 1e3)
+
+        # use the message target load reached to make the trigger more accurate. (This message isnt available on all engines.)
         if vector.msg['name'] == '9047':
             self._full_load_timestamp = vector.msg['timestamp']
-        if self._full_load_timestamp != None and int(vector.msg['timestamp']) >= self._full_load_timestamp: # now switch to 'targetoperation'
-                vector1 = self.update_vector(vector)
-                vector1.currentstate = 'targetoperation'
 
-                vector2 = copy.deepcopy(vector1) # copy vector, insert the calculated state_vector
-                vector2.msg = {'name':'9047', 'message':'Target load reached (calculated)','timestamp':self._full_load_timestamp,'severity':600}
-                vector2.statechange = True
+        # trigger on the firstmessage after the calcalulated event time, switch to 'targetoperation'
+        # insert a virtual message before the received message exactly at _full_load_timestamp
+        if self._full_load_timestamp != None and int(vector.msg['timestamp']) >= self._full_load_timestamp:
+                
+                # change the state, because we do the statechange in vector 1 
+                vector2 = self.update_vector_on_statechange(vector)
                 vector2.currentstate = 'targetoperation'
-                vector2.currentstate_start = pd.to_datetime(self._full_load_timestamp * 1e6)
+                
+                # copy state vector, fill out the relevant data and trigger to tagetopeartion
+                vector1 = copy.deepcopy(vector2)
+                vector1.msg = {'name':'9047', 'message':'Target load reached (calculated)','timestamp':self._full_load_timestamp,'severity':600}
+                vector1.statechange = True
+                vector1.currentstate = 'targetoperation'
+                vector1.currentstate_start = pd.to_datetime(self._full_load_timestamp * 1e6)
+
+                # Reset the State for the next event.
                 self._full_load_timestamp = None
-                return [vector2,vector1]
+
+                # and deliver both events back to the main loop
+                return [vector1,vector2]
+        
+        # just pass through state vectors in all other cases.
         return [vector]
 class FSM:
     def __init__(self, e):
@@ -144,7 +161,8 @@ class FSM:
                     { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
                     ]),             
                 'loadramp': LoadrampState('loadramp',[
-                    { 'trigger':'3226 Ignition off', 'new-state':'standstill'}
+                    { 'trigger':'3226 Ignition off', 'new-state':'standstill'},
+                    { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
                     ], e),             
                 'targetoperation': State('targetoperation',[
                     { 'trigger':'1232 Request module off', 'new-state':'rampdown'},
@@ -173,6 +191,23 @@ class FSM:
     def states(self):
         return self._states
 
+    def dot(self, fn):
+        """Create a FSM Diagram of specified states in *.dot Format
+        Args:
+            fn : Filename
+        """
+        with open(fn, 'w') as f:
+            f.write("digraph G {\n")
+            f.write('    graph [rankdir=TB labelfontcolor=red fontname="monospace" nodesep=1 size="20,33"]\n')
+            f.write('    node [fontname="monospace" fontsize=10  shape="circle"]\n')
+            f.write('    edge [fontname="monospace" color="grey" fontsize=10]\n')
+            for s in self._states:
+                f.write(f'    {s.replace("-","")} [label="{s}"]\n')
+                for t in self._states[s]._transferfunctions:
+                    f.write(f'    {s.replace("-","")} -> {t["new-state"].replace("-","")} [label="{t["trigger"]}"]\n')
+            f.write("}\n")
+
+
 class filterFSM:
     run2filter_content = ['no','success','mode','startpreparation','starter','speedup','idle','synchronize','loadramp','cumstarttime','maxload','ramprate','targetoperation','rampdown','coolrun','runout','count_alarms', 'count_warnings']
     vertical_lines_times = ['startpreparation','starter','speedup','idle','synchronize','loadramp','targetoperation','rampdown','coolrun','runout']
@@ -188,6 +223,7 @@ class msgFSM:
         #self._post_period = 0 #sec 'postrun' in data download Start after cycle stop event.
 
         fsmStates = FSM(self._e)
+        fsmStates.dot('FSM.dot')
         self.states = fsmStates.states
 
         self.svec = StateVector()
@@ -280,6 +316,12 @@ class msgFSM:
                 for line in self._runlog:
                     f.write(line + '\n')
 
+    def save_detailrunlog(self, fn):
+        if len(self.results['runlogdetail']):
+            with open(fn, 'w') as f:
+                for vec in self.results['runlogdetail']:
+                    f.write(vec.__str__() + '\n')
+
     def runlogdetail(self, startversuch, statechanges_only = False):
         ts_start = startversuch['starttime'].timestamp() * 1e3
         ts_end = startversuch['endtime'].timestamp() * 1e3
@@ -364,10 +406,12 @@ class msgFSM:
                     sv = self.results['starts'][-1]
                     # phases = [x[6:] for x in self.results['starts'][-1]['timing'] if x.startswith('start_')]
                     phases = list(sv['timing'].keys())
+
+                    # some sense checks, mostly for commissioning or Test cycles 
                     if 'targetoperation' in phases:
                         tlr = sv['timing']['targetoperation']
                         tlr = [{'start':tlr[0]['start'], 'end':tlr[-1]['end']}]
-                        sv['timing']['targetoperation_org'] = sv['timing']['targetoperation'] 
+                        sv['timing']['targetoperation_org'] = sv['timing']['targetoperation']
                         sv['timing']['targetoperation'] = tlr
                     # durations = { ph:pd.Timedelta(self.results['starts'][-1]['timing']['end_'+ph] - self.results['starts'][-1]['timing']['start_'+ph]).total_seconds() for ph in phases}
                     durations = { ph:pd.Timedelta(sv['timing'][ph][-1]['end'] - sv['timing'][ph][-1]['start']).total_seconds() for ph in phases}
@@ -408,25 +452,40 @@ class msgFSM:
         return self.states[self.svec.currentstate].trigger_on_vector(self.svec)
 
     ## FSM Entry Point.
-    def run1(self, enforce=False, limitdebug = None):
+    def run1(self, enforce=False, silent=False):
         if len(self.results['starts']) == 0 or enforce or not ('run2' in self.results['starts'][0]):
             self.init_results()
-            #tqdm disturbes the VSC Debugger - disable for debug purposes please.     
-            #for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
-            for i, msg in self._messages.iterrows():
 
-                # the FSM statusvector is called self.svec
-                self.svec.msg = msg
-                retsv = self.call_trigger_states()
-                for sv in retsv:   
-                    self.svec = sv
-                    #print(f"{len(self.results['runlogdetail']):5} {sv}")
-                    self.results['runlogdetail'].append(copy.deepcopy(sv))
-                    self._fsm_Service_selector()
-                    self._fsm_collect_alarms()
-                    self._fsm_Operating_Cycle()
-                            
+            if silent:
+                for i, msg in self._messages.iterrows():
+                    self.dorun1(msg)
 
+            else:
+                #tqdm disturbes the VSC Debugger - disable for debug purposes please.     
+                for i,msg in tqdm(self._messages.iterrows(), total=self._messages.shape[0], ncols=80, mininterval=1, unit=' messages', desc="FSM"):
+                    self.dorun1(msg)
+
+                # # the FSM statusvector is called self.svec
+                # self.svec.msg = msg
+                # retsv = self.call_trigger_states()
+                # for sv in retsv:   
+                #     self.svec = sv
+                #     #print(f"{len(self.results['runlogdetail']):5} {sv}")
+                #     self.results['runlogdetail'].append(copy.deepcopy(sv))
+                #     self._fsm_Service_selector()
+                #     self._fsm_collect_alarms()
+                #     self._fsm_Operating_Cycle()
+    
+    def dorun1(self, msg):
+        self.svec.msg = msg
+        retsv = self.call_trigger_states()
+        for sv in retsv:   
+            self.svec = sv
+            #print(f"{len(self.results['runlogdetail']):5} {sv}")
+            self.results['runlogdetail'].append(copy.deepcopy(sv))
+            self._fsm_Service_selector()
+            self._fsm_collect_alarms()
+            self._fsm_Operating_Cycle()
 
 
 
