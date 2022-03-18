@@ -38,7 +38,7 @@ def FSMPlot_Start(fsm,startversuch, data, vset, dset, figsize=(16,10)):
     if 'maxload' in startversuch:
         if startversuch['maxload'] == startversuch['maxload']:
             fig.add_layout(Span(location=startversuch['maxload'],dimension='width',x_range_name='default', y_range_name='0',line_color='red', line_dash='solid', line_alpha=0.4)) 
-    fig.add_layout(Span(location=1500,dimension='width',x_range_name='default', y_range_name='1',line_color='blue', line_dash='solid', line_alpha=0.4)) 
+    fig.add_layout(Span(location=fsm._e.Speed_nominal,dimension='width',x_range_name='default', y_range_name='1',line_color='blue', line_dash='solid', line_alpha=0.4)) 
 
     return fig
 
@@ -175,6 +175,7 @@ def states_lines(startversuch):
 
 def plot_with_additional_results(
         fsm,
+        data,
         startversuch, 
         vset=None, 
         dset = 
@@ -183,14 +184,13 @@ def plot_with_additional_results(
         dfigsize=(16,8)
     ):
 
-    if vset == None:
-        vset = []
-        for rec in dset:
-            for d in rec['col']:
-                vset.append(d) 
-        vset = list(set(vset))
+    # if vset == None:
+    #     vset = []
+    #     for rec in dset:
+    #         for d in rec['col']:
+    #             vset.append(d) 
+    #     vset = list(set(vset))
 
-    data = get_cycle_data2(fsm, startversuch, max_length=None, min_length=None, cycletime=1, silent=False, p_data=vset)
     fig = FSMPlot_Start(fsm, startversuch, data, vset, dset, figsize=dfigsize); 
     #fsm run 2 results
     lcol='blue'
