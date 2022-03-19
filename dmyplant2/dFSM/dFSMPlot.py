@@ -95,17 +95,17 @@ def _resample_data(fsm, data, startversuch):
         odata3 = data[data.datetime >= d3]
     return pd.concat([odata1,odata2,odata3]).reset_index(drop='index')
 
-def get_cycle_data(fsm,rec, max_length=None, min_length=None, cycletime=None, silent=False, p_data=None, reduce=True):
-    t0 = int(arrow.get(rec['starttime']).timestamp() * 1000 - fsm._pre_period * 1000)
-    t1 = int(arrow.get(rec['endtime']).timestamp() * 1000 + fsm._post_period * 1000)
+def get_cycle_data(fsm,startversuch, max_length=None, min_length=None, cycletime=None, silent=False, p_data=None, reduce=True):
+    t0 = int(arrow.get(startversuch['starttime']).timestamp() * 1000 - fsm._pre_period * 1000)
+    t1 = int(arrow.get(startversuch['endtime']).timestamp() * 1000 + fsm._post_period * 1000)
     if max_length:
         if (t1 - t0) > max_length * 1e3:
             t1 = int(t0 + max_length * 1e3)
     if min_length:
         if (t1 - t0) < min_length * 1e3:
             t1 = int(t0 + min_length * 1e3)
-    data = fsm.load_data(cycletime, tts_from=t0, tts_to=t1, silent=silent, p_data=p_data)
-    #data = fsm._resample_data(data,rec) if reduce else data
+    data = load_data(fsm, cycletime, tts_from=t0, tts_to=t1, silent=silent, p_data=p_data)
+    #data = fsm._resample_data(data,startversuch) if reduce else data
     data = data[(data['time'] >= t0) & (data['time'] <= t1)]
     return data
 #################

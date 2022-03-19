@@ -26,6 +26,7 @@ from dmyplant2.dFSM import (
     filterFSM, 
     FSMPlot_Start,
     plot_with_additional_results, 
+    get_cycle_data, 
     get_cycle_data2, 
     disp_result,
     disp_alarms,
