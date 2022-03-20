@@ -12,6 +12,5 @@ from .dFSMPlot import (
     FSMPlot_Start, 
     get_cycle_data, 
     get_cycle_data2, 
-    states_lines, 
-    plot_with_additional_results
+    states_lines
 )

@@ -96,6 +96,7 @@ def _resample_data(fsm, data, startversuch):
     return pd.concat([odata1,odata2,odata3]).reset_index(drop='index')
 
 def get_cycle_data(fsm,startversuch, max_length=None, min_length=None, cycletime=None, silent=False, p_data=None, reduce=True):
+    
     t0 = int(arrow.get(startversuch['starttime']).timestamp() * 1000 - fsm._pre_period * 1000)
     t1 = int(arrow.get(startversuch['endtime']).timestamp() * 1000 + fsm._post_period * 1000)
     if max_length:
@@ -172,39 +173,3 @@ def states_lines(startversuch):
     sv_lines = [v for v in startversuch[filterFSM.vertical_lines_times] if v==v]
     start = startversuch['starttime']; lines=list(np.cumsum(sv_lines)); 
     return [start + pd.Timedelta(value=v,unit='sec') for v in [0] + lines]
-
-def plot_with_additional_results(
-        fsm,
-        data,
-        startversuch, 
-        vset=None, 
-        dset = 
-        [{'col':['Power_PowerAct'], 'ylim':(0,5000), 'color':'red'},
-        {'col':['Various_Values_SpeedAct'],'ylim': [0, 2500], 'color':'blue'}],
-        dfigsize=(16,8)
-    ):
-
-    # if vset == None:
-    #     vset = []
-    #     for rec in dset:
-    #         for d in rec['col']:
-    #             vset.append(d) 
-    #     vset = list(set(vset))
-
-    fig = FSMPlot_Start(fsm, startversuch, data, vset, dset, figsize=dfigsize); 
-    #fsm run 2 results
-    lcol='blue'
-    pl, _ = detect_edge_left(data, 'Power_PowerAct', startversuch)
-    pr, _ = detect_edge_right(data, 'Power_PowerAct', startversuch)
-    sl, _ = detect_edge_left(data, 'Various_Values_SpeedAct', startversuch)
-    sr, _ = detect_edge_right(data, 'Various_Values_SpeedAct', startversuch)
-    add_dbokeh_vlines([sl.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
-    add_dbokeh_vlines([sr.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
-    add_dbokeh_vlines([pl.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
-    add_dbokeh_vlines([pr.loc], fig,line_color=lcol, line_dash='solid', line_alpha=0.4)
-
-    #pp(startversuch['timing']) # ['timings']['start_loadramp'])
-    if 'loadramp' in startversuch['timing']:
-        add_dbokeh_vlines([startversuch['timing']['loadramp'][-1]['end']], fig,line_color='green', line_dash='solid', line_alpha=0.4, line_width=4)
-
-    return fig
